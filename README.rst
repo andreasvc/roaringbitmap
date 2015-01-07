@@ -9,19 +9,21 @@ query as the conjunction of subqueries.
 
 Requirements
 ------------
-Cython
+- Python 2.7+/3   http://www.python.org (headers required, e.g. python-dev package)
+- Cython 0.20+    http://www.cython.org
 
 Installation
 ------------
-$ make
+::
+    $ make
 
 Usage
 -----
-A RoaringBitmap() can be used as a replacement for a normal Python set as long
-as elements are 32-bit integers. The datastructure is mutable, although
+A ``RoaringBitmap()`` can be used as a replacement for a normal Python set as
+long as elements are 32-bit integers. The datastructure is mutable, although
 initializing with a sorted iterable is most efficient.
 
 References
 ----------
-http://roaringbitmap.org/
-Paper: http://arxiv.org/abs/1402.6407
+- http://roaringbitmap.org/
+- Paper: http://arxiv.org/abs/1402.6407
