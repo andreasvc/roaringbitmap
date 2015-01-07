@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# Cython-generated files
+roaringbitmap/*.c
+
 # C extensions
 *.so
 
