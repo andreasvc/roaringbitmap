@@ -361,20 +361,19 @@ cdef class Block(object):
 				CLEARBIT(self.buffer.data.as_ulongs, elem)
 				self.cardinality -= 1
 				self.resize()
-		else:
-			if self.inverted:
-				found = binarysearch(self.buffer.data.as_ushorts,
-						0, BLOCKSIZE - self.cardinality, elem)
-				if found < 0:
-					self.buffer.insert(-found - 1, elem)
-					self.cardinality -= 1
-					self.resize()
-			else:
-				found = binarysearch(self.buffer.data.as_ushorts,
-						0, self.cardinality, elem)
-				if found >= 0:
-					del self.buffer[found]
-					self.cardinality -= 1
+		elif self.inverted:
+			found = binarysearch(self.buffer.data.as_ushorts,
+					0, BLOCKSIZE - self.cardinality, elem)
+			if found < 0:
+				self.buffer.insert(-found - 1, elem)
+				self.cardinality -= 1
+				self.resize()
+		else:  # positive array
+			found = binarysearch(self.buffer.data.as_ushorts,
+					0, self.cardinality, elem)
+			if found >= 0:
+				del self.buffer[found]
+				self.cardinality -= 1
 
 	cdef iand(self, Block other):
 		cdef array.array tmp
@@ -387,10 +386,11 @@ cdef class Block(object):
 						BITNSLOTS(BLOCKSIZE))
 			elif other.inverted:
 				for n in range(BLOCKSIZE - other.cardinality):
-					CLEARBIT(self.buffer.data.as_ulongs,
-							other.buffer.data.as_ushorts[n])
-				self.cardinality = abitcount(self.buffer.data.as_ulongs,
-						BITNSLOTS(BLOCKSIZE))
+					if TESTBIT(self.buffer.data.as_ulongs,
+							other.buffer.data.as_ushorts[n]):
+						CLEARBIT(self.buffer.data.as_ulongs,
+								other.buffer.data.as_ushorts[n])
+						self.cardinality -= 1
 			else:  # not other.inverted
 				tmp = array.clone(ushortarray, 0, False)
 				self.cardinality = 0
@@ -459,7 +459,7 @@ cdef class Block(object):
 					tmp.data.as_ushorts)
 			array.resize(tmp, length)
 			self.inverted = False
-			self.cardinality -= length
+			self.cardinality = length
 			self.buffer = tmp
 		elif not self.inverted and other.inverted:
 			tmp = array.clone(ushortarray,
@@ -471,7 +471,7 @@ cdef class Block(object):
 					self.cardinality, BLOCKSIZE - other.cardinality,
 					tmp.data.as_ushorts)
 			array.resize(tmp, length)
-			self.cardinality -= length
+			self.cardinality = length
 			self.buffer = tmp
 		self.resize()
 
@@ -536,12 +536,11 @@ cdef class Block(object):
 				tmp = array.clone(ushortarray,
 						self.cardinality + other.cardinality,
 						False)
-				length = union2by2(self.buffer.data.as_ushorts,
+				self.cardinality = union2by2(self.buffer.data.as_ushorts,
 						other.buffer.data.as_ushorts,
 						self.cardinality, other.cardinality,
 						tmp.data.as_ushorts)
-				array.resize(tmp, length)
-				self.cardinality = length
+				array.resize(tmp, self.cardinality)
 				self.buffer = tmp
 			elif self.inverted and other.inverted:
 				tmp = array.clone(ushortarray,
