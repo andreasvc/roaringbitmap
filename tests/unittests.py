@@ -87,14 +87,6 @@ class Test_roaringbitmap(object):
 			b = rb != rb2
 			assert a == b
 
-	def test_and(self, pair):
-		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
-			assert ref & ref2 == rb & rb2
-
 	def test_iand(self, pair):
 		for data1, data2 in pair:
 			ref = set(data1)
@@ -105,14 +97,6 @@ class Test_roaringbitmap(object):
 			rb &= rb2
 			assert ref == rb
 
-	def test_or(self, pair):
-		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
-			assert ref | ref2 == rb | rb2
-
 	def test_ior(self, pair):
 		for data1, data2 in pair:
 			ref = set(data1)
@@ -121,4 +105,22 @@ class Test_roaringbitmap(object):
 			rb2 = roaringbitmap.RoaringBitmap(data2)
 			ref |= ref2
 			rb |= rb2
+			print(len(set(data1)), len(ref), len(rb), len(ref2), len(rb2),
+					ref == rb)
 			assert ref == rb
+
+	def test_and(self, pair):
+		for data1, data2 in pair:
+			ref = set(data1)
+			ref2 = set(data2)
+			rb = roaringbitmap.RoaringBitmap(data1)
+			rb2 = roaringbitmap.RoaringBitmap(data2)
+			assert ref & ref2 == rb & rb2
+
+	def test_or(self, pair):
+		for data1, data2 in pair:
+			ref = set(data1)
+			ref2 = set(data2)
+			rb = roaringbitmap.RoaringBitmap(data1)
+			rb2 = roaringbitmap.RoaringBitmap(data2)
+			assert ref | ref2 == rb | rb2

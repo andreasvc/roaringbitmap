@@ -3,7 +3,8 @@ from libc.string cimport memset, memcpy
 cimport cython
 from cpython cimport array
 from roaringbitmap.bit cimport iteratesetbits, iterateunsetbits, \
-		setintersect, setunion, setintersectinplace, setunioninplace, \
+		bitsetintersect, bitsetunion, \
+		bitsetintersectinplace, bitsetunioninplace, \
 		anextset, anextunset, abitcount, abitlength
 
 cdef extern from "macros.h":

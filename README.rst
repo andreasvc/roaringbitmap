@@ -26,35 +26,35 @@ Benchmarks
     sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init     0.000842          0.00999   0.0842
-    iand     1.31e-05         3.73e-06     3.52
-    and       0.00107         0.000163     6.53
-    ior      1.02e-05         1.24e-05    0.821
-    or         0.0017         0.000617     2.76
-    eq       0.000431         0.000841    0.512
-    neq      5.32e-06         3.12e-05     0.17
+    init     0.000944           0.0101   0.0931
+    iand      1.3e-05         3.63e-06     3.57
+    and       0.00105         0.000177     5.93
+    ior      1.01e-05         3.87e-06     2.61
+    or        0.00197         0.000252     7.82
+    eq       0.000464         0.000993    0.467
+    neq      5.22e-06         3.05e-05    0.171
 
     dense set / high load factor
     100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init        0.316             1.75    0.181
-    iand       0.0029         1.31e-05      222
-    and         0.231          0.00052      444
-    ior        0.0017         1.13e-05      151
-    or          0.449         0.000535      840
-    eq         0.0505          0.00401     12.6
-    neq      8.53e-06         4.01e-05    0.213
+    init        0.315             1.74    0.181
+    iand       0.0029          1.1e-05      265
+    and          0.23         0.000463      496
+    ior       0.00173         1.22e-05      141
+    or          0.521         0.000538      970
+    eq         0.0509          0.00415     12.3
+    neq      8.76e-06         3.89e-05    0.225
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                 set()  RoaringBitmap()    ratio
-    init        0.511             2.89    0.177
-    iand      0.00677         2.02e-05      335
-    and         0.611         0.000918      665
-    ior       0.00592         2.06e-05      288
-    or          0.967         0.000952 1.02e+03
-    eq         0.0981           0.0103      9.5
-    neq      1.01e-05         4.11e-05    0.246
+    init        0.526             2.89    0.182
+    iand      0.00687         1.92e-05      357
+    and         0.621         0.000912      681
+    ior         0.006         1.91e-05      314
+    or          0.983         0.000918 1.07e+03
+    eq         0.0991           0.0106     9.38
+    neq       9.5e-06         4.14e-05     0.23
 
 Usage
 -----
