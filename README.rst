@@ -24,14 +24,11 @@ Requirements
 
 Installation
 ------------
-
-::
-    $ make
+``$ make``
 
 Benchmarks
 ----------
-
-::
+``$ python3 benchmarks.py``::
     sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
@@ -74,4 +71,6 @@ initializing with a sorted iterable is most efficient.
 References
 ----------
 - http://roaringbitmap.org/
+- https://github.com/lemire/RoaringBitmap
+- https://issues.apache.org/jira/browse/LUCENE-5983
 - Paper: http://arxiv.org/abs/1402.6407
