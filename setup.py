@@ -40,7 +40,7 @@ directives = {
 		'fast_fail': True,
 		'nonecheck': False,
 		'wraparound': False,
-		'boundscheck': True,
+		'boundscheck': False,
 		'embedsignature': True,
 		'warn.unused': True,
 		'warn.unreachable': True,

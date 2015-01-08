@@ -124,22 +124,27 @@ cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline void setintersectinplace(uint64_t *dest, uint64_t *src, int slots):
+cdef inline int setintersectinplace(uint64_t *dest, uint64_t *src, int slots):
 	"""dest gets the intersection of dest and src.
 
 	both operands must have at least `slots' slots."""
 	cdef int a
+	cdef size_t result = 0
 	for a in range(slots):
 		dest[a] &= src[a]
+		result += bit_popcount(dest[a])
+	return result
 
-
-cdef inline void setunioninplace(uint64_t *dest, uint64_t *src, int slots):
+cdef inline int setunioninplace(uint64_t *dest, uint64_t *src, int slots):
 	"""dest gets the union of dest and src.
 
 	Both operands must have at least ``slots`` slots."""
 	cdef int a
+	cdef size_t result = 0
 	for a in range(slots):
 		dest[a] |= src[a]
+		result += bit_popcount(dest[a])
+	return result
 
 
 cdef inline void setintersect(uint64_t *dest, uint64_t *src1, uint64_t *src2,
