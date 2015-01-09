@@ -3,7 +3,7 @@ from __future__ import division, print_function, absolute_import, \
         unicode_literals
 import random
 import pytest
-from roaringbitmap import roaringbitmap
+from roaringbitmap import RoaringBitmap
 
 # (numitems, maxnum)
 PARAMS = [(200, 40000),
@@ -37,22 +37,27 @@ class Test_roaringbitmap(object):
 	def test_init(self, single):
 		for data in single:
 			ref = set(data)
-			rb = roaringbitmap.RoaringBitmap(data)
+			rb = RoaringBitmap(data)
 			assert ref == set(rb)
 
 	def test_add(self, single):
 		for data in single:
 			ref = set()
-			rb = roaringbitmap.RoaringBitmap()
+			rb = RoaringBitmap()
 			for n in sorted(data):
 				ref.add(n)
 				rb.add(n)
 			assert ref == rb
+			with pytest.raises(OverflowError):
+				rb.add(-1)
+				rb.add(1 << 32)
+			rb.add(0)
+			rb.add((1 << 32) - 1)
 
 	def test_discard(self, single):
 		for data in single:
 			ref = set()
-			rb = roaringbitmap.RoaringBitmap()
+			rb = RoaringBitmap()
 			for n in sorted(data):
 				ref.add(n)
 				rb.add(n)
@@ -65,10 +70,8 @@ class Test_roaringbitmap(object):
 
 	def test_eq(self, single):
 		for data in single:
-			ref = set(data)
-			ref2 = set(data)
-			rb = roaringbitmap.RoaringBitmap(data)
-			rb2 = roaringbitmap.RoaringBitmap(data)
+			ref, ref2 = set(data), set(data)
+			rb, rb2 = RoaringBitmap(data), RoaringBitmap(data)
 			assert ref == ref2
 			assert rb == rb2
 			a = ref == ref2
@@ -77,10 +80,8 @@ class Test_roaringbitmap(object):
 
 	def test_neq(self, pair):
 		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert ref != ref2
 			assert rb != rb2
 			a = ref != ref2
@@ -89,38 +90,60 @@ class Test_roaringbitmap(object):
 
 	def test_iand(self, pair):
 		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref &= ref2
 			rb &= rb2
 			assert ref == rb
 
 	def test_ior(self, pair):
 		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref |= ref2
 			rb |= rb2
-			print(len(set(data1)), len(ref), len(rb), len(ref2), len(rb2),
-					ref == rb)
 			assert ref == rb
 
 	def test_and(self, pair):
 		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert ref & ref2 == rb & rb2
 
 	def test_or(self, pair):
 		for data1, data2 in pair:
-			ref = set(data1)
-			ref2 = set(data2)
-			rb = roaringbitmap.RoaringBitmap(data1)
-			rb2 = roaringbitmap.RoaringBitmap(data2)
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert ref | ref2 == rb | rb2
+
+	def test_xor(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert ref ^ ref2 == rb ^ rb2
+
+	def test_sub(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert ref - ref2 == rb - rb2
+
+	def test_ixor(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			ref ^= ref2
+			rb ^= rb2
+			assert len(ref) == len(rb)
+			assert ref == rb
+
+	def test_isub(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			ref -= ref2
+			rb -= rb2
+			assert len(ref) <= len(set(data1))
+			assert len(rb) <= len(set(data1))
+			assert len(ref) == len(rb)
+			assert ref == rb

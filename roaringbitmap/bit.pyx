@@ -2,6 +2,7 @@
 
 NB: most functions are in bit.pxd to facilitate function inlining."""
 
+
 def test():
 	cdef uint64_t ulongvec[2]
 	ulongvec[0] = 1UL << (sizeof(uint64_t) * 8 - 1)

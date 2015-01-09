@@ -3,11 +3,11 @@ from __future__ import division, print_function, absolute_import, \
         unicode_literals
 import random
 import timeit
-from roaringbitmap import roaringbitmap
 
 N = 1 << 17  # number of random elements
 M = 100  # number of test runs
 MAX = 1 << 20  # range of elements
+DATA1, DATA2 = None, None
 
 
 def pair():
@@ -23,7 +23,7 @@ def bench_init():
 			setup='from __main__ import DATA1').timeit(number=M)
 	b = timeit.Timer('rb = RoaringBitmap(DATA1)',
 			setup='from __main__ import DATA1; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
 				).timeit(number=M)
 	return a, b
 
@@ -34,7 +34,7 @@ def bench_eq():
 				'ref = set(DATA1); ref2 = set(DATA1)').timeit(number=M)
 	b = timeit.Timer('rb == rb2',
 			setup='from __main__ import DATA1; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA1)').timeit(number=M)
 	return a, b
@@ -46,7 +46,7 @@ def bench_neq():
 				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
 	b = timeit.Timer('rb == rb2',
 			setup='from __main__ import DATA1, DATA2; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
 	return a, b
@@ -58,7 +58,7 @@ def bench_and():
 				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
 	b = timeit.Timer('rb & rb2',
 			setup='from __main__ import DATA1, DATA2; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
 	return a, b
@@ -70,7 +70,31 @@ def bench_or():
 				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
 	b = timeit.Timer('rb | rb2',
 			setup='from __main__ import DATA1, DATA2; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
+				'rb = RoaringBitmap(DATA1); '
+				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
+	return a, b
+
+
+def bench_xor():
+	a = timeit.Timer('ref ^ ref2',
+			setup='from __main__ import DATA1, DATA2; '
+				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
+	b = timeit.Timer('rb ^ rb2',
+			setup='from __main__ import DATA1, DATA2; '
+				'from roaringbitmap import RoaringBitmap; '
+				'rb = RoaringBitmap(DATA1); '
+				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
+	return a, b
+
+
+def bench_sub():
+	a = timeit.Timer('ref - ref2',
+			setup='from __main__ import DATA1, DATA2; '
+				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
+	b = timeit.Timer('rb - rb2',
+			setup='from __main__ import DATA1, DATA2; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
 	return a, b
@@ -83,7 +107,7 @@ def bench_iand():
 			for _ in range(M)]
 	bb = [timeit.Timer('rb &= rb2',
 			setup='from __main__ import DATA1, DATA2; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA2)').timeit(number=1)
 			for _ in range(M)]
@@ -97,7 +121,35 @@ def bench_ior():
 			for _ in range(M)]
 	bb = [timeit.Timer('rb |= rb2',
 			setup='from __main__ import DATA1, DATA2; '
-				'from roaringbitmap.roaringbitmap import RoaringBitmap; '
+				'from roaringbitmap import RoaringBitmap; '
+				'rb = RoaringBitmap(DATA1); '
+				'rb2 = RoaringBitmap(DATA2)').timeit(number=1)
+			for _ in range(M)]
+	return sum(aa) / M, sum(bb) / M
+
+
+def bench_ixor():
+	aa = [timeit.Timer('ref ^= ref2',
+			setup='from __main__ import DATA1, DATA2; '
+				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=1)
+			for _ in range(M)]
+	bb = [timeit.Timer('rb ^= rb2',
+			setup='from __main__ import DATA1, DATA2; '
+				'from roaringbitmap import RoaringBitmap; '
+				'rb = RoaringBitmap(DATA1); '
+				'rb2 = RoaringBitmap(DATA2)').timeit(number=1)
+			for _ in range(M)]
+	return sum(aa) / M, sum(bb) / M
+
+
+def bench_isub():
+	aa = [timeit.Timer('ref -= ref2',
+			setup='from __main__ import DATA1, DATA2; '
+				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=1)
+			for _ in range(M)]
+	bb = [timeit.Timer('rb -= rb2',
+			setup='from __main__ import DATA1, DATA2; '
+				'from roaringbitmap import RoaringBitmap; '
 				'rb = RoaringBitmap(DATA1); '
 				'rb2 = RoaringBitmap(DATA2)').timeit(number=1)
 			for _ in range(M)]
@@ -126,13 +178,15 @@ def main():
 		DATA1, DATA2 = pair()
 
 		fmt = '%8s %8s %16s %8s'
-		numfmt = '%5.3g'
+		numfmt = '%8.3g'
 		print('%d runs with sets of %d random elements n s.t. 0 <= n < %d' % (
 				M, N, MAX))
 		print(fmt % ('', 'set()', 'RoaringBitmap()', 'ratio'))
 		for func in (bench_init,
-				bench_iand, bench_and,
-				bench_ior, bench_or,
+				bench_and,  # bench_iand,
+				bench_or,  # bench_ior,
+				bench_xor,  # bench_ixor,
+				bench_sub,  # bench_isub,
 				bench_eq, bench_neq):
 			a, b = func()
 			print(fmt % (func.__name__.split('_', 1)[1].ljust(8),

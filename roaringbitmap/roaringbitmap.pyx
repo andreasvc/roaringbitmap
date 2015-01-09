@@ -5,19 +5,14 @@ efficient set operations. The space of integers is partitioned into blocks
 of 2 ** 16 integers. Depending on the number of elements each block contains,
 it is stored as either:
 
-	- an array of up to 2 ** 12 shorts that are part of the set
-	- an array of up to 2 ** 12 shorts that are not part of the set
-	- a bitmap of 2 ** 16 bits with a 1-bit for each element in the set.
+	- an array of up to 1 << 12 shorts that are part of the set
+	- an array of up to 1 << 12 shorts that are not part of the set
+	- a bitmap of 2 << 16 bits with a 1-bit for each element in the set.
 """
 # TODOs
-# [x] intersection, union
-# [x] tests
-# [x] benchmarks
-# [x] serialization
-# [x] galloping search for large vs. small intersection
+# [ ] subet operation
+# [ ] additional operations: rank, select, complement, shifts, get / set slices
 # [ ] aggregate intersection of more than 2 roaringbitmaps
-# [ ] other set operations: xor, diff, subset, complement, rank, select,
-#		shifts, get / set slices
 # [ ] store maximum capacity? needed for complement
 # [ ] error checking
 # [ ] serialization compatible with original Roaring bitmap
@@ -37,21 +32,26 @@ cdef array.array ushortarray = array.array(
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
 	def __init__(self, iterable=None):
-		cdef Block block
+		cdef Block block = None
 		cdef uint32_t elem
 		cdef uint16_t *elem_parts
-		cdef int i
+		cdef int i, prev = -1
 		self.data = []
 		if iterable is not None:
 			for elem in sorted(iterable):
 				elem_parts = <uint16_t *>(&elem)
-				i = self._getindex(elem_parts[1])
-				if i >= 0:
-					block = self.data[i]
-				else:
-					block = Block.__new__(Block,
-							elem_parts[1], False, False, 0, None)
-					self.data.append(block)
+				if elem_parts[1] != prev:
+					i = self._getindex(elem_parts[1])
+					if i >= 0:
+						block = self.data[i]
+					else:
+						block = Block.__new__(Block)
+						block.key = elem_parts[1]
+						block.dense = block.inverted = False
+						block.cardinality = 0
+						block.buffer = array.clone(ushortarray, 0, False)
+						self.data.append(block)
+					prev = elem_parts[1]
 				block.add(elem_parts[0])
 
 	def add(self, uint32_t elem):
@@ -61,7 +61,11 @@ cdef class RoaringBitmap(object):
 		if i >= 0:
 			block = self.data[i]
 		else:
-			block = Block.__new__(Block, elem_parts[1], False, False, 0, None)
+			block = Block.__new__(Block)
+			block.key = elem_parts[1]
+			block.dense = block.inverted = False
+			block.cardinality = 0
+			block.buffer = array.clone(ushortarray, 0, False)
 			self.data.insert(-i - 1, block)
 		block.add(elem_parts[0])
 
@@ -106,7 +110,7 @@ cdef class RoaringBitmap(object):
 	def __richcmp__(self, other, op):
 		cdef RoaringBitmap ob1, ob2
 		cdef Block b1, b2
-		if op == 2:
+		if op == 2:  # ==
 			if not isinstance(self, RoaringBitmap):
 				return self == set(other)
 			elif not isinstance(other, RoaringBitmap):
@@ -116,10 +120,20 @@ cdef class RoaringBitmap(object):
 				if (b1.key != b2.key
 						or b1.cardinality != b2.cardinality
 						or b1.dense != b2.dense
-						or b1.inverted != b2.inverted
-						or b1.buffer != b2.buffer):
+						or b1.inverted != b2.inverted):
+					return False
+			for b1, b2 in zip(ob1.data, ob2.data):
+				if b1.buffer != b2.buffer:
 					return False
 			return True
+		elif op == 1:  # <=
+			return self & other == self  # FIXME slow
+		elif op == 5:  # >=
+			return self & other == other  # FIXME slow
+		elif op == 0:  # <
+			return len(self) < len(other) and self <= other
+		elif op == 4:  # >
+			return len(self) > len(other) and self >= other
 		return NotImplemented
 
 	def __iand__(self, other):
@@ -213,6 +227,100 @@ cdef class RoaringBitmap(object):
 				ob1.data.append(block2.copy())
 		return ob1
 
+	def __isub__(self, other):
+		cdef RoaringBitmap ob1, ob2
+		cdef Block block1, block2
+		cdef int length1, length2
+		cdef int pos1 = 0, pos2 = 0
+		cdef uint16_t key1, key2
+		if not isinstance(self, RoaringBitmap):
+			ob1, ob2 = RoaringBitmap(self), other
+		elif not isinstance(other, RoaringBitmap):
+			ob1, ob2 = self, RoaringBitmap(other)
+		else:
+			ob1, ob2 = self, other
+		length1, length2 = len(ob1.data), len(ob2.data)
+		if pos1 < length1 and pos2 < length2:
+			block1, block2 = ob1.data[pos1], ob2.data[pos2]
+			key1, key2 = block1.key, block2.key
+			while True:
+				if key1 < key2:
+					pos1 += 1
+					if pos1 == length1:
+						break
+					block1 = ob1.data[pos1]
+					key1 = block1.key
+				elif key1 > key2:
+					pos2 += 1
+					if pos2 == length2:
+						break
+					block2 = ob2.data[pos2]
+					key2 = block2.key
+				else:
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					block1.isub(block2)
+					if block1.cardinality > 0:
+						pos1 += 1
+					else:
+						del ob1.data[pos1]
+						length1 -= 1
+					pos2 += 1
+					if pos1 == length1 or pos2 == length2:
+						break
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					key1, key2 = block1.key, block2.key
+		return ob1
+
+	def __ixor__(self, other):
+		cdef RoaringBitmap ob1, ob2
+		cdef Block block1, block2
+		cdef int length1, length2
+		cdef int pos1 = 0, pos2 = 0
+		cdef uint16_t key1, key2
+		if not isinstance(self, RoaringBitmap):
+			ob1, ob2 = RoaringBitmap(self), other
+		elif not isinstance(other, RoaringBitmap):
+			ob1, ob2 = self, RoaringBitmap(other)
+		else:
+			ob1, ob2 = self, other
+		length1, length2 = len(ob1.data), len(ob2.data)
+		if pos1 < length1 and pos2 < length2:
+			block1, block2 = ob1.data[pos1], ob2.data[pos2]
+			key1, key2 = block1.key, block2.key
+			while True:
+				if key1 < key2:
+					pos1 += 1
+					if pos1 == length1:
+						break
+					block1 = ob1.data[pos1]
+					key1 = block1.key
+				elif key1 > key2:
+					self.data.insert(pos1, block2.copy())
+					length1 += 1
+					pos1 += 1
+					pos2 += 1
+					if pos2 == length2:
+						break
+					block2 = ob2.data[pos2]
+					key2 = block2.key
+				else:
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					block1.ixor(block2)
+					if block1.cardinality > 0:
+						pos1 += 1
+					else:
+						del ob1.data[pos1]
+						length1 -= 1
+					pos2 += 1
+					if pos1 == length1 or pos2 == length2:
+						break
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					key1, key2 = block1.key, block2.key
+		if pos1 == length1:
+			for block2 in ob2.data[pos2:]:
+				ob1.data.append(block2.copy())
+		return ob1
+
 	def __and__(self, other):
 		cdef RoaringBitmap answer
 		if isinstance(self, RoaringBitmap):
@@ -237,6 +345,29 @@ cdef class RoaringBitmap(object):
 			raise ValueError
 		return answer
 
+	def __xor__(self, other):
+		cdef RoaringBitmap answer
+		if isinstance(self, RoaringBitmap):
+			answer = self.copy()
+			answer ^= other
+		elif isinstance(other, RoaringBitmap):
+			answer = other.copy()
+			answer ^= self
+		else:
+			raise ValueError
+		return answer
+
+	def __sub__(self, other):
+		cdef RoaringBitmap answer
+		if isinstance(self, RoaringBitmap):
+			answer = self.copy()
+		elif isinstance(other, RoaringBitmap):
+			answer = RoaringBitmap(self)
+		else:
+			raise ValueError
+		answer -= other
+		return answer
+
 	def __len__(self):
 		cdef Block block
 		cdef int result = 0
@@ -250,6 +381,12 @@ cdef class RoaringBitmap(object):
 			for elem in block.iterblock():
 				yield elem
 
+	def __reversed__(self):
+		cdef Block block
+		for block in reversed(self.data):
+			for elem in reversed(list(block.iterblock())):  # FIXME
+				yield elem
+
 	def __bool__(self):
 		cdef Block block
 		for block in self.data:
@@ -258,13 +395,60 @@ cdef class RoaringBitmap(object):
 		return False
 
 	def __repr__(self):
-		return 'RoaringBitmap(%r)' % set(self)
+		return 'RoaringBitmap({%s})' % repr(list(self)).strip('[]')
 
 	def __reduce__(self):
 		return (RoaringBitmap, None, self.data)
 
 	def __setstate__(self, data):
 		self.data = data
+
+	def intersection(self, other):
+		return self & other
+
+	def union(self, other):
+		return self | other
+
+	def intersection_update(self, other):
+		self &= other
+
+	def union_update(self, other):
+		self |= other
+
+	def update(self, other):
+		self |= other
+
+	def clear(self):
+		self.data.clear()
+
+	def pop(self):
+		"""Remove and return the smallest element."""
+		cdef Block block
+		if len(self.data) == 0:
+			raise ValueError
+		block = self.data[0]
+		return block.pop()
+
+	def isdisjoint(self, other):
+		return len(self & other) == 0  # FIXME slow
+
+	def issubset(self, other):
+		return self <= other
+
+	def issuperset(self, other):
+		return self >= other
+
+	def difference(self, other):
+		return self - other
+
+	def difference_update(self, other):
+		self -= other
+
+	def symmetric_difference(self, other):
+		return self ^ other
+
+	def symmetric_difference_update(self, other):
+		self ^= other
 
 	cdef int _getindex(self, uint16_t key):
 		cdef Block block
@@ -304,27 +488,19 @@ cdef class Block(object):
 	cdef uint16_t cardinality  # the number of elements
 	cdef array.array buffer  # bitvector, positive sparse, or inverted sparse
 
-	def __cinit__(self,
-			uint16_t key,
-			bint dense,
-			bint inverted,
-			uint16_t cardinality,
-			array.array buffer):
-		self.key = key
-		self.dense = dense
-		self.inverted = inverted
-		self.cardinality = cardinality
-		self.buffer = buffer
-		if buffer is None:
-			self.buffer = array.clone(ushortarray, 0, False)
+	def __cinit__(self):
+		pass
 
 	def __init__(self):
 		pass  # should only be used by pickle
 
 	def copy(self):
-		cdef Block answer = Block.__new__(Block,
-				self.key, self.dense, self.inverted,
-				self.cardinality, self.buffer)
+		cdef Block answer = Block.__new__(Block)
+		answer.key = self.key
+		answer.dense = self.dense
+		answer.inverted = self.inverted
+		answer.cardinality = self.cardinality
+		answer.buffer = self.buffer
 		return answer
 
 	cdef contains(self, uint16_t elem):
@@ -425,15 +601,12 @@ cdef class Block(object):
 			self.inverted = False
 		# not self.dense and not other.dense
 		elif not self.inverted and not other.inverted:
-			tmp = array.clone(ushortarray,
-					min(self.cardinality, other.cardinality), False)
 			self.cardinality = intersect2by2(
 					self.buffer.data.as_ushorts,
 					other.buffer.data.as_ushorts,
 					self.cardinality, other.cardinality,
-					tmp.data.as_ushorts)
-			array.resize(tmp, self.cardinality)
-			self.buffer = tmp
+					self.buffer.data.as_ushorts)
+			array.resize(self.buffer, self.cardinality)
 		elif self.inverted and other.inverted:
 			tmp = array.clone(ushortarray,
 					BLOCKSIZE - (self.cardinality + other.cardinality),
@@ -462,17 +635,13 @@ cdef class Block(object):
 			self.cardinality = length
 			self.buffer = tmp
 		elif not self.inverted and other.inverted:
-			tmp = array.clone(ushortarray,
-					min(self.cardinality, BLOCKSIZE - other.cardinality),
-					False)
 			length = difference(
 					self.buffer.data.as_ushorts,
 					other.buffer.data.as_ushorts,
 					self.cardinality, BLOCKSIZE - other.cardinality,
-					tmp.data.as_ushorts)
-			array.resize(tmp, length)
+					self.buffer.data.as_ushorts)
+			array.resize(self.buffer, length)
 			self.cardinality = length
-			self.buffer = tmp
 		self.resize()
 
 	cdef ior(self, Block other):
@@ -498,7 +667,7 @@ cdef class Block(object):
 				self.dense = False
 				self.inverted = True
 				self.buffer = tmp
-			else:  # self has positive array
+			else:  # other has positive array
 				for n in range(other.cardinality):
 					if not TESTBIT(self.buffer.data.as_ulongs,
 							other.buffer.data.as_ushorts[n]):
@@ -511,9 +680,9 @@ cdef class Block(object):
 				length = 0
 				for n in range(BLOCKSIZE - self.cardinality):
 					if not TESTBIT(other.buffer.data.as_ulongs,
-							self.data.buffer.as_ushorts[n]):
+							self.buffer.data.as_ushorts[n]):
 						tmp.data.as_ushorts[length] = (
-							self.data.buffer.as_ushorts[n])
+							self.buffer.data.as_ushorts[n])
 						length += 1
 				array.resize(tmp, length)
 				self.cardinality = BLOCKSIZE - length
@@ -543,33 +712,27 @@ cdef class Block(object):
 				array.resize(tmp, self.cardinality)
 				self.buffer = tmp
 			elif self.inverted and other.inverted:
-				tmp = array.clone(ushortarray,
-						BLOCKSIZE - (self.cardinality + other.cardinality),
-						False)
 				length = intersect2by2(self.buffer.data.as_ushorts,
 						other.buffer.data.as_ushorts,
 						BLOCKSIZE - self.cardinality,
 						BLOCKSIZE - other.cardinality,
-						tmp.data.as_ushorts)
-				array.resize(tmp, length)
+						self.buffer.data.as_ushorts)
+				array.resize(self.buffer, length)
 				self.cardinality = BLOCKSIZE - length
-				self.buffer = tmp
 			elif self.inverted and not other.inverted:
-				tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
-						False)
 				length = difference(
 						self.buffer.data.as_ushorts,
 						other.buffer.data.as_ushorts,
 						BLOCKSIZE - self.cardinality,
 						other.cardinality,
-						tmp.data.as_ushorts)
-				array.resize(tmp, length)
+						self.buffer.data.as_ushorts)
+				array.resize(self.buffer, length)
 				self.cardinality = BLOCKSIZE - length
-				self.buffer = tmp
 			elif not self.inverted and other.inverted:
 				tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
 						False)
-				length = difference(other.buffer.data.as_ushorts,
+				length = difference(
+						other.buffer.data.as_ushorts,
 						self.buffer.data.as_ushorts,
 						BLOCKSIZE - other.cardinality,
 						self.cardinality,
@@ -580,15 +743,148 @@ cdef class Block(object):
 				self.buffer = tmp
 		self.resize()
 
-	cdef Block _and(self, Block other):
-		cdef Block answer = self.copy()
-		answer.iand(other)
-		return other
+	cdef isub(self, Block other):
+		cdef Block tmp2
+		cdef int length, n
+		if self.dense and other.dense:
+			self.cardinality = bitsetsubtractinplace(
+					self.buffer.data.as_ulongs,
+					other.buffer.data.as_ulongs,
+					BITNSLOTS(BLOCKSIZE))
+		elif self.dense and not other.dense:
+			if other.inverted:
+				tmp2 = other.copy()
+				tmp2.todense()
+				self.isub(tmp2)
+				del tmp2
+				return
+			else:  # other has positive array
+				for n in range(other.cardinality):
+					if TESTBIT(self.buffer.data.as_ulongs,
+							other.buffer.data.as_ushorts[n]):
+						CLEARBIT(self.buffer.data.as_ulongs,
+								other.buffer.data.as_ushorts[n])
+						self.cardinality -= 1
+		elif not self.dense and other.dense:
+			if self.inverted:
+				self.todense()
+				self.isub(other)
+				return
+			else:  # self has positive array
+				length = 0
+				for n in range(self.cardinality):
+					if not TESTBIT(other.buffer.data.as_ulongs,
+							self.buffer.data.as_ushorts[n]):
+						self.buffer.data.as_ushorts[length] = (
+								self.buffer.data.as_ushorts[n])
+						length += 1
+				array.resize(self.buffer, length)
+				self.cardinality = length
+		elif not self.dense and not other.dense:
+			if not self.inverted and not other.inverted:
+				self.cardinality = difference(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						self.cardinality, other.cardinality,
+						self.buffer.data.as_ushorts)
+				array.resize(self.buffer, self.cardinality)
+			elif self.inverted and other.inverted:
+				tmp = array.clone(ushortarray,
+						BLOCKSIZE - (self.cardinality + other.cardinality),
+						False)
+				length = union2by2(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						BLOCKSIZE - self.cardinality,
+						BLOCKSIZE - other.cardinality,
+						tmp.data.as_ushorts)
+				array.resize(tmp, length)
+				self.cardinality = BLOCKSIZE - length
+				array.buffer = tmp
+			elif self.inverted and not other.inverted:
+				length = intersect2by2(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						BLOCKSIZE - self.cardinality, other.cardinality,
+						self.buffer.data.as_ushorts)
+				array.resize(self.buffer, length)
+				self.cardinality = BLOCKSIZE - length
+			elif not self.inverted and other.inverted:
+				self.cardinality = intersect2by2(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						self.cardinality, other.cardinality,
+						self.buffer.data.as_ushorts)
+				array.resize(self.buffer, self.cardinality)
+		self.resize()
 
-	cdef Block _or(self, Block other):
-		cdef Block answer = self.copy()
-		answer.ior(other)
-		return other
+	cdef ixor(self, Block other):
+		cdef array.array tmp
+		cdef int length, n
+		if self.dense and other.dense:
+			self.cardinality = bitsetxorinplace(
+					self.buffer.data.as_ulongs,
+					other.buffer.data.as_ulongs,
+					BITNSLOTS(BLOCKSIZE))
+		elif self.dense and not other.dense:
+			if other.inverted:
+				tmp2 = other.copy()
+				tmp2.todense()
+				self.ixor(tmp2)
+				del tmp2
+				return
+			else:  # other has positive array
+				for n in range(other.cardinality):
+					if TESTBIT(self.buffer.data.as_ulongs,
+							other.buffer.data.as_ushorts[n]):
+						CLEARBIT(self.buffer.data.as_ulongs,
+							self.buffer.data.as_ushorts[n])
+						self.cardinality -= 1
+		elif not self.dense and other.dense:
+			if self.inverted:
+				self.todense()
+				self.ixor(other)
+				return
+			else:  # self has positive array
+				self.todense()
+				self.ixor(other)
+				return
+		elif not self.dense and not other.dense:
+			if not self.inverted and not other.inverted:
+				tmp = array.clone(ushortarray,
+						self.cardinality + other.cardinality,
+						False)
+				length = xor2by2(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						self.cardinality,
+						other.cardinality,
+						tmp.data.as_ushorts)
+				array.resize(tmp, length)
+				self.cardinality = length
+				self.buffer = tmp
+			elif self.inverted and other.inverted:
+				tmp = array.clone(ushortarray,
+						BLOCKSIZE - (self.cardinality + other.cardinality),
+						False)
+				length = xor2by2(
+						self.buffer.data.as_ushorts,
+						other.buffer.data.as_ushorts,
+						BLOCKSIZE - self.cardinality,
+						BLOCKSIZE - other.cardinality,
+						tmp.data.as_ushorts)
+				array.resize(tmp, length)
+				self.cardinality = BLOCKSIZE - length
+				self.buffer = tmp
+			elif self.inverted and not other.inverted:
+				self.todense()
+				self.ixor(other)
+				return
+			elif not self.inverted and other.inverted:
+				self.todense()
+				self.ixor(other)
+				return
+		self.resize()
 
 	cdef flip(self):
 		"""In-place complement of this block."""
@@ -602,105 +898,91 @@ cdef class Block(object):
 
 	cdef resize(self):
 		"""Convert between dense, sparse, inverted sparse as needed."""
+		if self.dense:
+			if self.cardinality < MAXARRAYLENGTH:
+				self.toposarray()
+			elif self.cardinality > BLOCKSIZE - MAXARRAYLENGTH:
+				self.toinvarray()
+		elif self.inverted:  # not dense
+			if (MAXARRAYLENGTH < self.cardinality
+					< BLOCKSIZE - MAXARRAYLENGTH):
+				self.todense()
+			elif self.cardinality < MAXARRAYLENGTH:
+				# shouldn't happen?
+				raise ValueError
+		else:  # not dense, not self.inverted
+			if MAXARRAYLENGTH < self.cardinality < BLOCKSIZE - MAXARRAYLENGTH:
+				# To dense bitvector
+				self.todense()
+			elif self.cardinality > BLOCKSIZE - MAXARRAYLENGTH:
+				# shouldn't happen?
+				raise ValueError
+
+	cdef todense(self):
+		# To dense bitvector
+		cdef array.array tmp
+		cdef int n
+		if self.inverted:
+			tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), False)
+			memset(tmp.data.as_uchars, 255, BLOCKSIZE // sizeof(char))
+			for n in range(BLOCKSIZE - self.cardinality):
+				CLEARBIT(tmp.data.as_ulongs,
+						self.buffer.data.as_ushorts[n])
+		else:
+			tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), True)
+			for n in range(self.cardinality):
+				SETBIT(tmp.data.as_ulongs, self.buffer.data.as_ushorts[n])
+		self.dense = True
+		self.inverted = False
+		self.buffer = tmp
+
+	cdef toposarray(self):
+		# To positive sparse array
 		cdef array.array tmp
 		cdef int n, elem, idx
 		cdef uint64_t cur
 		if self.dense:
-			if self.cardinality < MAXARRAYLENGTH:
-				# To positive sparse array
-				tmp = array.clone(ushortarray, self.cardinality, False)
+			tmp = array.clone(ushortarray, self.cardinality, False)
 
-				cur = self.buffer.data.as_ulongs[0]
-				idx = n = 0
+			cur = self.buffer.data.as_ulongs[0]
+			idx = n = 0
+			elem = iteratesetbits(self.buffer.data.as_ulongs,
+					BITNSLOTS(BLOCKSIZE), &cur, &idx)
+			while elem != -1:
+				tmp.data.as_ushorts[n] = elem
+				n += 1
 				elem = iteratesetbits(self.buffer.data.as_ulongs,
 						BITNSLOTS(BLOCKSIZE), &cur, &idx)
-				while elem != -1:
-					tmp.data.as_ushorts[n] = elem
-					n += 1
-					elem = iteratesetbits(self.buffer.data.as_ulongs,
-							BITNSLOTS(BLOCKSIZE), &cur, &idx)
-				self.dense = False
-				self.inverted = False
-				self.buffer = tmp
-			elif self.cardinality > BLOCKSIZE - MAXARRAYLENGTH:
-				# To inverted sparse array
-				tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
-						False)
-				cur = self.buffer.data.as_ulongs[0]
-				idx = n = 0
+			assert n == self.cardinality
+			self.dense = False
+			self.inverted = False
+			self.buffer = tmp
+		else:
+			raise ValueError("don't do this")
+
+	cdef toinvarray(self):
+		# To inverted sparse array
+		cdef array.array tmp
+		cdef int n, elem, idx
+		cdef uint64_t cur
+		if self.dense:
+			tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
+					False)
+			cur = self.buffer.data.as_ulongs[0]
+			idx = n = 0
+			elem = iterateunsetbits(self.buffer.data.as_ulongs,
+					BITNSLOTS(BLOCKSIZE), &cur, &idx)
+			while elem != -1:
+				tmp.data.as_ushorts[n] = elem
+				n += 1
 				elem = iterateunsetbits(self.buffer.data.as_ulongs,
 						BITNSLOTS(BLOCKSIZE), &cur, &idx)
-				while elem != -1:
-					tmp.data.as_ushorts[n] = elem
-					n += 1
-					elem = iterateunsetbits(self.buffer.data.as_ulongs,
-							BITNSLOTS(BLOCKSIZE), &cur, &idx)
-				self.dense = False
-				self.inverted = True
-				self.buffer = tmp
-		elif self.inverted:  # not dense
-			if (MAXARRAYLENGTH < self.cardinality
-					< BLOCKSIZE - MAXARRAYLENGTH):
-				# To dense bitvector
-				tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), False)
-				memset(tmp.data.as_uchars, 255, BLOCKSIZE // sizeof(char))
-				for n in range(BLOCKSIZE - self.cardinality):
-					CLEARBIT(tmp.data.as_ulongs,
-							self.buffer.data.as_ushorts[n])
-				self.dense = True
-				self.inverted = False
-				self.buffer = tmp
-			elif self.cardinality < MAXARRAYLENGTH:
-				# shouldn't happen?
-				raise ValueError
-				# # To positive sparse array
-				# tmp = array.clone(ushortarray, self.cardinality, False)
-				# if self.cardinality > 0:
-				# 	tmp.extend(range(0, self.buffer.data.as_ushorts[0]))
-				# 	if self.cardinality > 1:
-				# 		for n in range(BLOCKSIZE - self.cardinality - 1):
-				# 			if (self.buffer.data.as_ushorts[n + 1]
-				# 					- self.buffer.data.as_ushorts[n]) > 1:
-				# 				tmp.extend(range(
-				# 						self.buffer.data.as_ushorts[n],
-				# 						self.buffer.data.as_ushorts[n + 1]))
-				# 		tmp.extend(range(
-				# 				self.buffer.data.as_ushorts[
-				# 					self.cardinality - 1],
-				# 				BLOCKSIZE))
-				# self.buffer = tmp
-				# self.dense = False
-				# self.inverted = False
-		else:  # not dense, not self.inverted
-			if MAXARRAYLENGTH < self.cardinality < BLOCKSIZE - MAXARRAYLENGTH:
-				# To dense bitvector
-				tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), True)
-				for n in range(self.cardinality):
-					SETBIT(tmp.data.as_ulongs, self.buffer.data.as_ushorts[n])
-				self.dense = True
-				self.inverted = False
-				self.buffer = tmp
-			elif self.cardinality > BLOCKSIZE - MAXARRAYLENGTH:
-				# shouldn't happen?
-				raise ValueError
-				# # To inverted sparse array
-				# tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
-				# 		False)
-				# if self.cardinality > 0:
-				# 	tmp.extend(range(0, self.buffer.data.as_ushorts[0]))
-				# 	if self.cardinality > 1:
-				# 		for n in range(self.cardinality - 1):
-				# 			if (self.buffer.data.as_ushorts[n + 1]
-				# 					- self.buffer.data.as_ushorts[n]) > 1:
-				# 				tmp.extend(range(
-				# 						self.buffer.data.as_ushorts[n],
-				# 						self.buffer.data.as_ushorts[n + 1]))
-				# 		tmp.extend(range(
-				# 				self.buffer.data.as_ushorts[self.cardinality - 1],
-				# 				BLOCKSIZE))
-				# self.buffer = tmp
-				# self.dense = False
-				# self.inverted = True
+			assert n == BLOCKSIZE - self.cardinality
+			self.dense = False
+			self.inverted = True
+			self.buffer = tmp
+		else:
+			raise ValueError("don't do this")
 
 	def iterblock(self):
 		cdef uint32_t high = self.key << 16
@@ -718,21 +1000,30 @@ cdef class Block(object):
 				n = iteratesetbits(self.buffer.data.as_ulongs,
 						BITNSLOTS(BLOCKSIZE), &cur, &idx)
 		elif self.inverted:
-			start = -1
-			if self.cardinality > 0:
-				for low in range(0, self.buffer[0]):
+			if self.cardinality < BLOCKSIZE:
+				for low in range(0, self.buffer.data.as_ushorts[0]):
 					yield high | low
-			if self.cardinality > 1:
-				for n in self.buffer:
-					if start < n:
-						for low in range(start, n):
+				if self.cardinality < BLOCKSIZE - 1:
+					for n in range(BLOCKSIZE - self.cardinality - 1):
+						for low in range(
+								self.buffer.data.as_ushorts[n],
+								self.buffer.data.as_ushorts[n + 1]):
 							yield high | low
-					start = n + 1
-				for low in range(0, self.buffer[self.cardinality - 1]):
-					yield high | low
+					for low in range(self.buffer.data.as_ushorts[
+							BLOCKSIZE - self.cardinality - 1], BLOCKSIZE):
+						yield high | low
 		else:
-			for low in self.buffer:
+			for n in range(self.cardinality):
+				low = self.buffer.data.as_ushorts[n]
 				yield high | low
+
+	def pop(self):
+		"""Remove and return the smallest element."""
+		if self.cardinality == 0:
+			raise ValueError
+		elem = next(iter(self))
+		self.discard(elem)
+		return elem
 
 	def __repr__(self):
 		if self.dense:
@@ -752,6 +1043,15 @@ cdef class Block(object):
 		self.inverted = inverted
 		self.cardinality = cardinality
 		self.buffer = buffer
+
+
+cdef inline int min(int a, int b):
+	return a if a <= b else b
+
+
+cdef inline int max(int a, int b):
+	return a if a >= b else b
+
 
 cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem):
 	"""Binary search for short `elem` in array `data`."""
@@ -864,7 +1164,6 @@ cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem):
 	return upper
 
 
-
 cdef int union2by2(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest):
 	cdef int k1 = 0, k2 = 0, pos = 0
@@ -928,12 +1227,12 @@ cdef int difference(uint16_t *data1, uint16_t *data2,
 			pos += 1
 			k1 += 1
 			if k1 >= length1:
-				break
+				return pos
 		elif data1[k1] == data2[k2]:
 			k1 += 1
 			k2 += 1
 			if k1 >= length1:
-				break
+				return pos
 			if k2 >= length2:
 				while k1 < length1:
 					dest[pos] = data1[k1]
@@ -950,48 +1249,48 @@ cdef int difference(uint16_t *data1, uint16_t *data2,
 				return pos
 
 
-# cdef int xor2by2(uint16_t *data1, uint16_t *data2,
-# 		int length1, int length2, uint16_t *dest):
-# 	cdef int k1 = 0, k2 = 0, pos = 0
-# 	if length2 == 0:
-# 		memcpy(<void *>dest, <void *>data1, length1 * sizeof(uint16_t))
-# 		return length1
-# 	elif length1 == 0:
-# 		memcpy(<void *>dest, <void *>data2, length2 * sizeof(uint16_t))
-# 		return length2
-# 	while True:
-# 		if data1[k1] < data2[k2]:
-# 			dest[pos] = data1[k1]
-# 			pos += 1
-# 			k1 += 1
-# 			if k1 >= length1:
-# 				while k2 < length2:
-# 					dest[pos] = data2[k2]
-# 					pos += 1
-# 					k2 += 1
-# 				return pos
-# 		elif data1[k1] == data2[k2]:
-# 			k1 += 1
-# 			k2 += 1
-# 			if k1 >= length1:
-# 				while k2 < length2:
-# 					dest[pos] = data2[k2]
-# 					pos += 1
-# 					k2 += 1
-# 				return pos
-# 			if k2 >= length2:
-# 				while k1 < length1:
-# 					dest[pos] = data1[k1]
-# 					pos += 1
-# 					k1 += 1
-# 				return pos
-# 		else:  # data1[k1] > data2[k2]
-# 			dest[pos] = data2[k2]
-# 			pos += 1
-# 			k2 += 1
-# 			if k2 >= length2:
-# 				while k1 < length1:
-# 					dest[pos] = data1[k1]
-# 					pos += 1
-# 					k1 += 1
-# 				return pos
+cdef int xor2by2(uint16_t *data1, uint16_t *data2,
+		int length1, int length2, uint16_t *dest):
+	cdef int k1 = 0, k2 = 0, pos = 0
+	if length2 == 0:
+		memcpy(<void *>dest, <void *>data1, length1 * sizeof(uint16_t))
+		return length1
+	elif length1 == 0:
+		memcpy(<void *>dest, <void *>data2, length2 * sizeof(uint16_t))
+		return length2
+	while True:
+		if data1[k1] < data2[k2]:
+			dest[pos] = data1[k1]
+			pos += 1
+			k1 += 1
+			if k1 >= length1:
+				while k2 < length2:
+					dest[pos] = data2[k2]
+					pos += 1
+					k2 += 1
+				return pos
+		elif data1[k1] == data2[k2]:
+			k1 += 1
+			k2 += 1
+			if k1 >= length1:
+				while k2 < length2:
+					dest[pos] = data2[k2]
+					pos += 1
+					k2 += 1
+				return pos
+			if k2 >= length2:
+				while k1 < length1:
+					dest[pos] = data1[k1]
+					pos += 1
+					k1 += 1
+				return pos
+		else:  # data1[k1] > data2[k2]
+			dest[pos] = data2[k2]
+			pos += 1
+			k2 += 1
+			if k2 >= length2:
+				while k1 < length1:
+					dest[pos] = data1[k1]
+					pos += 1
+					k1 += 1
+				return pos

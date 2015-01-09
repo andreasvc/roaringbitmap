@@ -4,6 +4,7 @@ __pycache__/
 
 # Cython-generated files
 roaringbitmap/*.c
+roaringbitmap/*.html
 
 # C extensions
 *.so
