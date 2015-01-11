@@ -23,7 +23,7 @@ cdef class Block(object):
 		answer.dense = self.dense
 		answer.inverted = self.inverted
 		answer.cardinality = self.cardinality
-		answer.buffer = self.buffer
+		answer.buffer = array.copy(self.buffer)
 		return answer
 
 	cdef contains(self, uint16_t elem):
