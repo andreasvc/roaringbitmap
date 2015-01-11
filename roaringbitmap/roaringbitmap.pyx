@@ -10,11 +10,15 @@ it is stored as either:
 	- a bitmap of 2 << 16 bits with a 1-bit for each element in the set.
 """
 # TODOs
+# [ ] count whether array vs bitmap is better
+# [ ] in-place vs. new bitmap
 # [ ] subet operation
 # [ ] additional operations: rank, select, complement, shifts, get / set slices
+# [ ] check growth strategy of arrays
 # [ ] aggregate intersection of more than 2 roaringbitmaps
-# [ ] store maximum capacity? needed for complement
+# [ ] constructor for range
 # [ ] error checking
+# [ ] re-use blocks, lazy delete
 # [ ] serialization compatible with original Roaring bitmap
 
 import sys
@@ -24,14 +28,11 @@ cimport cython
 DEF BLOCKSIZE = 1 << 16
 DEF MAXARRAYLENGTH = 1 << 12
 
-cdef array.array ulongarray = array.array(
-		'L' if sys.version[0] >= '3' else b'L', ())
 cdef array.array ushortarray = array.array(
 		'H' if sys.version[0] >= '3' else b'H', ())
 
 include "arrayops.pxi"
 include "block.pxi"
-
 
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
@@ -49,11 +50,7 @@ cdef class RoaringBitmap(object):
 					if i >= 0:
 						block = self.data[i]
 					else:
-						block = Block.__new__(Block)
-						block.key = elem_parts[1]
-						block.dense = block.inverted = False
-						block.cardinality = 0
-						block.buffer = array.clone(ushortarray, 0, False)
+						block = new_Block(elem_parts[1])
 						self.data.append(block)
 					prev = elem_parts[1]
 				block.add(elem_parts[0])
@@ -65,11 +62,7 @@ cdef class RoaringBitmap(object):
 		if i >= 0:
 			block = self.data[i]
 		else:
-			block = Block.__new__(Block)
-			block.key = elem_parts[1]
-			block.dense = block.inverted = False
-			block.cardinality = 0
-			block.buffer = array.clone(ushortarray, 0, False)
+			block = new_Block(elem_parts[1])
 			self.data.insert(-i - 1, block)
 		block.add(elem_parts[0])
 

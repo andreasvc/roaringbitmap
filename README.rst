@@ -46,35 +46,35 @@ Output of ``$ python benchmarks.py``::
     sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init      0.00085          0.00818      0.1
-    and       0.00113         0.000117     9.67
-    or        0.00192         0.000213     9.01
-    xor        0.0017         0.000205     8.29
-    sub         0.001         0.000152      6.6
-    eq       0.000497         0.000505     0.98
-    neq      5.01e-06          4.1e-05     0.12
+    init     0.000854          0.00768    0.111
+    and       0.00113         0.000158     7.16
+    or        0.00195         0.000269     7.26
+    xor       0.00166         0.000214     7.76
+    sub       0.00103         0.000158     6.53
+    eq        0.00048         0.000506    0.949
+    neq      5.96e-06         3.79e-05    0.157
 
     dense set / high load factor
     100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init        0.296             1.21     0.24
-    and         0.232         0.000455      509
-    or          0.467         0.000464 1.01e+03
-    xor         0.416         0.000461      903
-    sub         0.169         0.000461      366
-    eq         0.0621          0.00483     12.9
-    neq         1e-05         4.39e-05     0.23
+    init        0.297             1.18    0.253
+    and         0.223         0.000504      442
+    or          0.451         0.000507      889
+    xor         0.406         0.000525      773
+    sub         0.165         0.000512      322
+    eq         0.0586          0.00754     7.77
+    neq      9.06e-06         4.91e-05    0.184
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                 set()  RoaringBitmap()    ratio
-    init         0.51              2.1     0.24
-    and         0.615         0.000895      687
-    or           1.02         0.000897 1.14e+03
-    xor         0.908         0.000899 1.01e+03
-    sub         0.344          0.00093      370
-    eq           0.12           0.0105     11.5
-    neq      9.06e-06          5.1e-05     0.18
+    init        0.508             2.02    0.252
+    and         0.617          0.00111      558
+    or          0.992          0.00111      896
+    xor          0.89          0.00107      830
+    sub         0.349           0.0011      317
+    eq          0.117           0.0168     6.95
+    neq       1.1e-05          5.6e-05    0.196
 
 References
 ----------

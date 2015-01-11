@@ -1,3 +1,16 @@
+# The number of shorts to store a bitmap of 2**16 bits
+DEF BITMAPSIZE = BLOCKSIZE // 16
+
+
+cdef inline Block new_Block(uint16_t key):
+	cdef Block block = Block.__new__(Block)
+	block.key = key
+	block.dense = block.inverted = False
+	block.cardinality = 0
+	block.buffer = array.clone(ushortarray, 0, False)
+	return block
+
+
 @cython.freelist(4)
 @cython.final
 cdef class Block(object):
@@ -17,9 +30,8 @@ cdef class Block(object):
 	def __init__(self):
 		pass  # should only be used by pickle
 
-	def copy(self):
-		cdef Block answer = Block.__new__(Block)
-		answer.key = self.key
+	cdef copy(self):
+		cdef Block answer = new_Block(self.key)
 		answer.dense = self.dense
 		answer.inverted = self.inverted
 		answer.cardinality = self.cardinality
@@ -27,6 +39,7 @@ cdef class Block(object):
 		return answer
 
 	cdef contains(self, uint16_t elem):
+		cdef bint found
 		if self.dense:
 			return TESTBIT(self.buffer.data.as_ulongs, elem)
 		else:
@@ -39,39 +52,42 @@ cdef class Block(object):
 			return found
 
 	cdef add(self, uint16_t elem):
+		cdef int i
 		if self.dense:
 			if not TESTBIT(self.buffer.data.as_ulongs, elem):
 				SETBIT(self.buffer.data.as_ulongs, elem)
 				self.cardinality += 1
+				self.resize()
 		else:
-			found = binarysearch(self.buffer.data.as_ushorts,
+			i = binarysearch(self.buffer.data.as_ushorts,
 					0, self.cardinality, elem)
-			if self.inverted and found >= 0:
-				del self.buffer[found]
+			if self.inverted and i >= 0:
+				del self.buffer[i]
 				self.cardinality += 1
-			elif found < 0:
-				self.buffer.insert(-found - 1, elem)
+			elif i < 0:
+				self.buffer.insert(-i - 1, elem)
 				self.cardinality += 1
 				self.resize()
 
 	cdef discard(self, uint16_t elem):
+		cdef int i
 		if self.dense:
 			if TESTBIT(self.buffer.data.as_ulongs, elem):
 				CLEARBIT(self.buffer.data.as_ulongs, elem)
 				self.cardinality -= 1
 				self.resize()
 		elif self.inverted:
-			found = binarysearch(self.buffer.data.as_ushorts,
+			i = binarysearch(self.buffer.data.as_ushorts,
 					0, BLOCKSIZE - self.cardinality, elem)
-			if found < 0:
-				self.buffer.insert(-found - 1, elem)
+			if i < 0:
+				self.buffer.insert(-i - 1, elem)
 				self.cardinality -= 1
 				self.resize()
 		else:  # positive array
-			found = binarysearch(self.buffer.data.as_ushorts,
+			i = binarysearch(self.buffer.data.as_ushorts,
 					0, self.cardinality, elem)
-			if found >= 0:
-				del self.buffer[found]
+			if i >= 0:
+				del self.buffer[i]
 				self.cardinality -= 1
 
 	cdef iand(self, Block other):
@@ -100,18 +116,18 @@ cdef class Block(object):
 								] = other.buffer.data.as_ushorts[n]
 						self.cardinality += 1
 				array.resize(tmp, self.cardinality)
-				self.buffer = tmp
 				self.dense = False
 				self.inverted = False
+				self.buffer = tmp
 		elif other.dense:
 			if self.inverted:
-				tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), False)
+				tmp = array.clone(ushortarray, BITMAPSIZE, False)
 				memset(tmp.data.as_uchars, 255, BLOCKSIZE // sizeof(char))
 				for n in range(BLOCKSIZE - self.cardinality):
 					CLEARBIT(tmp.data.as_ulongs,
 							self.buffer.data.as_ushorts[n])
 			else:  # not other.inverted
-				tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), True)
+				tmp = array.clone(ushortarray, BITMAPSIZE, True)
 				for n in range(self.cardinality):
 					SETBIT(tmp.data.as_ulongs,
 							self.buffer.data.as_ushorts[n])
@@ -119,9 +135,9 @@ cdef class Block(object):
 					tmp.data.as_ulongs,
 					other.buffer.data.as_ulongs,
 					BITNSLOTS(BLOCKSIZE))
-			self.buffer = tmp
 			self.dense = True
 			self.inverted = False
+			self.buffer = tmp
 		# not self.dense and not other.dense
 		elif not self.inverted and not other.inverted:
 			self.cardinality = intersect2by2(
@@ -323,7 +339,7 @@ cdef class Block(object):
 						tmp.data.as_ushorts)
 				array.resize(tmp, length)
 				self.cardinality = BLOCKSIZE - length
-				array.buffer = tmp
+				self.buffer = tmp
 			elif self.inverted and not other.inverted:
 				length = intersect2by2(
 						self.buffer.data.as_ushorts,
@@ -343,6 +359,7 @@ cdef class Block(object):
 
 	cdef ixor(self, Block other):
 		cdef array.array tmp
+		cdef Block tmp2
 		cdef int length, n
 		if self.dense and other.dense:
 			self.cardinality = bitsetxorinplace(
@@ -446,13 +463,13 @@ cdef class Block(object):
 		cdef array.array tmp
 		cdef int n
 		if self.inverted:
-			tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), False)
+			tmp = array.clone(ushortarray, BITMAPSIZE, False)
 			memset(tmp.data.as_uchars, 255, BLOCKSIZE // sizeof(char))
 			for n in range(BLOCKSIZE - self.cardinality):
 				CLEARBIT(tmp.data.as_ulongs,
 						self.buffer.data.as_ushorts[n])
 		else:
-			tmp = array.clone(ulongarray, BITNSLOTS(BLOCKSIZE), True)
+			tmp = array.clone(ushortarray, BITMAPSIZE, True)
 			for n in range(self.cardinality):
 				SETBIT(tmp.data.as_ulongs, self.buffer.data.as_ushorts[n])
 		self.dense = True
