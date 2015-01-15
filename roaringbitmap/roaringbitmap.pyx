@@ -176,6 +176,7 @@ cdef class RoaringBitmap(object):
 						break
 					block1, block2 = ob1.data[pos1], ob2.data[pos2]
 					key1, key2 = block1.key, block2.key
+		del ob1.data[pos1:]
 		return ob1
 
 	def __ior__(self, other):
