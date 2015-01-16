@@ -1,13 +1,13 @@
-from libc.stdint cimport uint16_t, uint32_t, uint64_t
+from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
 from libc.string cimport memset, memcpy
 
 cimport cython
 from cpython cimport array
 from roaringbitmap.bit cimport iteratesetbits, iterateunsetbits, \
 		bitsetintersect, bitsetunion, bitsetsubtract, bitsetxor, \
-		bitsetintersectinplace, bitsetunioninplace, \
-		bitsetsubtractinplace, bitsetxorinplace, \
-		anextset, anextunset, abitcount, abitlength
+		bitsetintersectinplace, bitsetunioninplace, bitsubset, \
+		bitsetsubtractinplace, bitsetxorinplace, select64, \
+		anextset, anextunset, abitcount, abitlength, bit_popcount
 
 cdef extern from "macros.h":
 	int BITSIZE

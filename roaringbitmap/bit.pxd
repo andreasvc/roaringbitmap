@@ -7,6 +7,7 @@ cdef extern from "macros.h":
 	uint64_t BITMASK(int b)
 	uint64_t TESTBIT(uint64_t a[], int b)
 	void CLEARBIT(uint64_t a[], int b)
+	void SETBIT(uint64_t a[], int b)
 
 
 cdef extern from "bitcount.h":
@@ -20,7 +21,7 @@ cdef extern from "bitcount.h":
 # cdef inline int abitcount(uint64_t *vec, int slots)
 # cdef inline int anextset(uint64_t *vec, uint32_t pos, int slots)
 # cdef inline int anextunset(uint64_t *vec, uint32_t pos, int slots)
-# cdef inline bint subset(uint64_t *vec1, uint64_t *vec2, int slots)
+# cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots)
 # cdef inline void bitsetunioninplace(uint64_t *dest,
 # 		uint64_t *src, int slots)
 # cdef inline void bitsetintersectinplace(uint64_t *dest,
@@ -105,7 +106,7 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 		if idx[0] >= slots:
 			return -1
 		cur[0] = vec[idx[0]]
-	tmp = bit_ctz(cur[0])  # index of bit in current slot
+	tmp = bit_ctz(cur[0])  # index of 1-bit in current slot
 	CLEARBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
@@ -114,13 +115,13 @@ cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 		uint64_t *cur, int *idx):
 	"""Like ``iteratesetbits``, but return indices of zero bits."""
 	cdef int tmp
-	while not ~cur[0]:
+	while ~cur[0] == 0:
 		idx[0] += 1
 		if idx[0] >= slots:
 			return -1
 		cur[0] = vec[idx[0]]
-	tmp = bit_ctz(~cur[0])  # index of bit in current slot
-	CLEARBIT(cur, tmp)
+	tmp = bit_ctz(~cur[0])  # index of 0-bit in current slot
+	SETBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
@@ -219,7 +220,7 @@ cdef inline void bitsetxor(uint64_t *dest, uint64_t *src1, uint64_t *src2,
 		dest[a] = src1[a] ^ src2[a]
 
 
-cdef inline bint subset(uint64_t *vec1, uint64_t *vec2, int slots):
+cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots):
 	"""Test whether vec1 is a subset of vec2.
 
 	i.e., all set bits of vec1 should be set in vec2."""
@@ -228,3 +229,33 @@ cdef inline bint subset(uint64_t *vec1, uint64_t *vec2, int slots):
 		if (vec1[a] & vec2[a]) != vec1[a]:
 			return False
 	return True
+
+cdef inline int select64(uint64_t w, int i):
+	"""Given a 64-bit int w, return the position of the ith 1-bit."""
+	cdef uint64_t part1 = w & 0xFFFFFFFF
+	cdef int wfirsthalf = bit_popcount(part1)
+	if wfirsthalf > i:
+		return select32(part1, i)
+	else:
+		return select32(<uint32_t>(w >> 32), i - wfirsthalf) + 32
+
+
+cdef inline int select32(uint32_t w, int i):
+	"""Given a 32-bit int w, return the position of the ith 1-bit."""
+	cdef uint64_t part1 =  w & 0xFFFF
+	cdef int wfirsthalf = bit_popcount(part1)
+	if wfirsthalf > i:
+		return select16(part1, i)
+	else:
+		return select16(w >> 16, i - wfirsthalf) + 16
+
+
+cdef inline int select16(uint16_t w, int i):
+	"""Given a 16-bit int w, return the position of the ith 1-bit."""
+	cdef int sumtotal = 0, counter
+	for counter in range(16):
+		sumtotal += (w >> counter) & 1
+		if sumtotal > i:
+			return counter
+	raise ValueError('cannot locate %dth bit in word with %d bits.' % (
+			i, bit_popcount(w)))

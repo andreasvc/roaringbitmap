@@ -94,7 +94,7 @@ cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem):
 		return lower
 	while lower + spansize < length and data[lower + spansize] < minitem:
 		spansize *= 2
-	upper = lower + spansize if lower + spansize < length else length - 1
+	upper = (lower + spansize) if lower + spansize < length else (length - 1)
 	if data[upper] == minitem:
 		return upper
 	if data[upper] < minitem:

@@ -12,16 +12,14 @@ it is stored as either:
 # TODOs
 # [ ] count whether array vs bitmap is better
 # [ ] in-place vs. new bitmap
-# [ ] subet operation
-# [ ] additional operations: rank, select, complement, shifts, get / set slices
+# [ ] additional operations: complement, shifts, get / set slices
 # [ ] check growth strategy of arrays
-# [ ] aggregate intersection of more than 2 roaringbitmaps
 # [ ] constructor for range
 # [ ] error checking
-# [ ] re-use blocks, lazy delete
 # [ ] serialization compatible with original Roaring bitmap
 
 import sys
+import heapq
 import array
 cimport cython
 
@@ -39,54 +37,21 @@ cdef class RoaringBitmap(object):
 	def __init__(self, iterable=None):
 		cdef Block block = None
 		cdef uint32_t elem
-		cdef uint16_t *elem_parts
+		cdef uint16_t key
 		cdef int i, prev = -1
 		self.data = []
 		if iterable is not None:
 			for elem in sorted(iterable):
-				elem_parts = <uint16_t *>(&elem)
-				if elem_parts[1] != prev:
-					i = self._getindex(elem_parts[1])
+				key = highbits(elem)
+				if key != prev:
+					i = self._getindex(key)
 					if i >= 0:
 						block = self.data[i]
 					else:
-						block = new_Block(elem_parts[1])
+						block = new_Block(key)
 						self.data.append(block)
-					prev = elem_parts[1]
-				block.add(elem_parts[0])
-
-	def add(self, uint32_t elem):
-		cdef Block block
-		cdef uint16_t *elem_parts = <uint16_t *>(&elem)
-		cdef int i = self._getindex(elem_parts[1])
-		if i >= 0:
-			block = self.data[i]
-		else:
-			block = new_Block(elem_parts[1])
-			self.data.insert(-i - 1, block)
-		block.add(elem_parts[0])
-
-	def discard(self, uint32_t elem):
-		cdef uint16_t *elem_parts = <uint16_t *>(&elem)
-		cdef int i = self._getindex(elem_parts[1])
-		cdef Block block
-		if i >= 0:
-			block = self.data[i]
-			block.discard(elem_parts[0])
-			if block.cardinality == 0:
-				del self.data[i]
-
-	def remove(self, uint32_t elem):
-		cdef Block block
-		cdef uint16_t *elem_parts = <uint16_t *>(&elem)
-		cdef int i = self._getindex(elem_parts[1])
-		if i >= 0:
-			block = self.data[i]
-			block.discard(elem_parts[0])
-			if block.cardinality == 0:
-				del self.data[i]
-		else:
-			raise KeyError(elem)
+					prev = key
+				block.add(lowbits(elem))
 
 	def copy(self):
 		cdef RoaringBitmap answer = RoaringBitmap()
@@ -95,13 +60,43 @@ cdef class RoaringBitmap(object):
 			answer.data.append(block.copy())
 		return answer
 
-	def __contains__(self, uint32_t elem):
-		cdef uint16_t *elem_parts = <uint16_t *>(&elem)
-		cdef int i = self._getindex(elem_parts[1])
+	def add(self, uint32_t elem):
+		cdef Block block
+		cdef uint16_t key = highbits(elem)
+		cdef int i = self._getindex(key)
+		if i >= 0:
+			block = self.data[i]
+		else:
+			block = new_Block(key)
+			self.data.insert(-i - 1, block)
+		block.add(lowbits(elem))
+
+	def discard(self, uint32_t elem):
+		cdef int i = self._getindex(highbits(elem))
 		cdef Block block
 		if i >= 0:
 			block = self.data[i]
-			return block.contains(elem_parts[0])
+			block.discard(lowbits(elem))
+			if block.cardinality == 0:
+				del self.data[i]
+
+	def remove(self, uint32_t elem):
+		cdef Block block
+		cdef int i = self._getindex(highbits(elem))
+		if i >= 0:
+			block = self.data[i]
+			block.discard(lowbits(elem))
+			if block.cardinality == 0:
+				del self.data[i]
+		else:
+			raise KeyError(elem)
+
+	def __contains__(self, uint32_t elem):
+		cdef int i = self._getindex(highbits(elem))
+		cdef Block block
+		if i >= 0:
+			block = self.data[i]
+			return block.contains(lowbits(elem))
 		return False
 
 	def __richcmp__(self, other, op):
@@ -116,21 +111,20 @@ cdef class RoaringBitmap(object):
 			for b1, b2 in zip(ob1.data, ob2.data):
 				if (b1.key != b2.key
 						or b1.cardinality != b2.cardinality
-						or b1.dense != b2.dense
-						or b1.inverted != b2.inverted):
+						or b1.state != b2.state):
 					return False
 			for b1, b2 in zip(ob1.data, ob2.data):
-				if b1.buffer != b2.buffer:
+				if b1.buf != b2.buf:
 					return False
 			return True
 		elif op == 1:  # <=
-			return self & other == self  # FIXME slow
+			return self.issubset(other)
 		elif op == 5:  # >=
-			return self & other == other  # FIXME slow
+			return self.issuperset(other)
 		elif op == 0:  # <
-			return len(self) < len(other) and self <= other
+			return len(self) < len(other) and self.issubset(other)
 		elif op == 4:  # >
-			return len(self) > len(other) and self >= other
+			return len(self) > len(other) and self.issuperset(other)
 		return NotImplemented
 
 	def __iand__(self, other):
@@ -376,13 +370,13 @@ cdef class RoaringBitmap(object):
 	def __iter__(self):
 		cdef Block block
 		for block in self.data:
-			for elem in block.iterblock():
+			for elem in block:
 				yield elem
 
 	def __reversed__(self):
 		cdef Block block
 		for block in reversed(self.data):
-			for elem in reversed(list(block.iterblock())):  # FIXME
+			for elem in reversed(list(block)):  # FIXME
 				yield elem
 
 	def __bool__(self):
@@ -431,10 +425,31 @@ cdef class RoaringBitmap(object):
 		return len(self & other) == 0  # FIXME slow
 
 	def issubset(self, other):
-		return self <= other
+		cdef RoaringBitmap ob
+		if not isinstance(other, RoaringBitmap):
+			ob = RoaringBitmap(other)
+		else:
+			ob = other
+		# return self <= other
+		cdef Block block
+		cdef int i = 0
+		if len(self.data) == 0:
+			return True
+		elif len(ob.data) == 0:
+			return False
+		for block in self.data:
+			i = ob._binarysearch(i, len(ob.data), block.key)
+			if i < 0:
+				return False
+		i = 0
+		for block in self.data:
+			i = ob._binarysearch(i, len(ob.data), block.key)
+			if not block.issubset(ob.data[i]):
+				return False
+		return True
 
 	def issuperset(self, other):
-		return self >= other
+		return other.issubset(self)
 
 	def difference(self, other):
 		return self - other
@@ -447,6 +462,58 @@ cdef class RoaringBitmap(object):
 
 	def symmetric_difference_update(self, other):
 		self ^= other
+
+	@classmethod
+	def aggregateand(cls, bitmaps):
+		"""Compute the intersection of an iterable of ``RoaringBitmap``
+		objects."""
+		cdef RoaringBitmap bitmap
+		if len(bitmaps) == 0:
+			return RoaringBitmap()
+		elif len(bitmaps) == 1:
+			return bitmaps[0].copy()
+		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
+		result = bitmaps[0] & bitmaps[1]
+		for bitmap in bitmaps[2:]:
+			result &= bitmap
+		return result
+
+	@classmethod
+	def aggregateor(cls, bitmaps):
+		"""Compute the union of an iterable of ``RoaringBitmap`` objects."""
+		cdef RoaringBitmap bitmap1, bitmap2
+		if len(bitmaps) == 0:
+			return RoaringBitmap()
+		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
+		heapq.heapify(queue)
+		while len(queue) > 1:
+			_, bitmap1 = heapq.heappop(queue)
+			_, bitmap2 = heapq.heappop(queue)
+			result = bitmap1 | bitmap2
+			heapq.heappush(queue, (result.size(), result))
+		_, result = heapq.heappop(queue)
+		return result
+
+	@classmethod
+	def aggregatexor(cls, bitmaps):
+		"""Compute the symmetric difference of an iterable of
+		``RoaringBitmap`` objects."""
+		cdef RoaringBitmap bitmap1, bitmap2, result
+		if len(bitmaps) == 0:
+			return RoaringBitmap()
+		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
+		heapq.heapify(queue)
+		while len(queue) > 1:
+			_, bitmap1 = heapq.heappop(queue)
+			_, bitmap2 = heapq.heappop(queue)
+			result = bitmap1 ^ bitmap2
+			heapq.heappush(queue, (result.size(), result))
+		_, result = heapq.heappop(queue)
+		return result
+
+	def size(self):
+		"""Return memory used in bytes."""
+		return sum(map(Block.size, self.data))
 
 	cdef int _getindex(self, uint16_t key):
 		cdef Block block
@@ -473,3 +540,11 @@ cdef class RoaringBitmap(object):
 			else:
 				return middleidx
 		return -(low + 1)
+
+
+cdef inline uint16_t highbits(uint32_t x):
+	return x >> 16
+
+
+cdef inline uint16_t lowbits(uint32_t x):
+	return x & 0xFFFF
