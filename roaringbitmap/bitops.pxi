@@ -1,21 +1,3 @@
-from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
-from libc.string cimport memcpy
-
-cdef extern from "macros.h":
-	int BITSIZE
-	int BITSLOT(int b)
-	uint64_t BITMASK(int b)
-	uint64_t TESTBIT(uint64_t a[], int b)
-	void CLEARBIT(uint64_t a[], int b)
-	void SETBIT(uint64_t a[], int b)
-
-
-cdef extern from "bitcount.h":
-	unsigned int bit_clz(uint64_t)
-	unsigned int bit_ctz(uint64_t)
-	unsigned int bit_popcount(uint64_t)
-
-
 # cdef inline functions defined here:
 # ===================================
 # cdef inline int abitcount(uint64_t *vec, int slots)

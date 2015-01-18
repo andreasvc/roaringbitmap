@@ -1,9 +1,3 @@
-# The number of shorts to store a bitmap of 2**16 bits
-DEF BITMAPSIZE = BLOCKSIZE // 16
-DEF POSITIVE = 0
-DEF DENSE = 1
-DEF INVERTED = 2
-
 cdef inline Block new_Block(uint16_t key):
 	cdef Block block = Block.__new__(Block)
 	block.key = key

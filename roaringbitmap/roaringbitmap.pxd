@@ -3,12 +3,7 @@ from libc.string cimport memset, memcpy
 
 cimport cython
 from cpython cimport array
-from roaringbitmap.bit cimport iteratesetbits, iterateunsetbits, \
-		bitsetintersect, bitsetunion, bitsetsubtract, bitsetxor, \
-		bitsetintersectinplace, bitsetunioninplace, bitsubset, \
-		bitsetsubtractinplace, bitsetxorinplace, select64, \
-		anextset, anextunset, abitcount, abitlength, bit_popcount, \
-		reviteratesetbits
+
 
 cdef extern from "macros.h":
 	int BITSIZE
@@ -18,6 +13,12 @@ cdef extern from "macros.h":
 	void CLEARBIT(uint64_t a[], int b)
 	uint64_t TESTBIT(uint64_t a[], int b)
 	uint64_t BITMASK(int b)
+
+
+cdef extern from "bitcount.h":
+	unsigned int bit_clz(uint64_t)
+	unsigned int bit_ctz(uint64_t)
+	unsigned int bit_popcount(uint64_t)
 
 
 cdef class RoaringBitmap(object):

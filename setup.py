@@ -18,7 +18,7 @@ metadata = dict(name='roaringbitmap',
 		author_email='A.W.vanCranenburgh@uva.nl',
 		url='https://github.com/andreasvc/roaringbitmap/',
 		classifiers=[
-				'Development Status :: 3 - Alpha',
+				'Development Status :: 4 - Beta',
 				'Intended Audience :: Science/Research',
 				'License :: OSI Approved :: GNU General Public License (GPL)',
 				'Operating System :: POSIX',

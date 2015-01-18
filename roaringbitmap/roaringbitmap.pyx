@@ -23,14 +23,26 @@ import heapq
 import array
 cimport cython
 
+# The maximum number of elements in a block
 DEF BLOCKSIZE = 1 << 16
+
+# The number of shorts to store a bitmap of 2**16 bits:
+DEF BITMAPSIZE = BLOCKSIZE // 16
+
 DEF MAXARRAYLENGTH = 1 << 12
+
+# The different ways a block may store its elements:
+DEF POSITIVE = 0
+DEF DENSE = 1
+DEF INVERTED = 2
 
 cdef array.array ushortarray = array.array(
 		'H' if sys.version[0] >= '3' else b'H', ())
 
+include "bitops.pxi"
 include "arrayops.pxi"
 include "block.pxi"
+
 
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
