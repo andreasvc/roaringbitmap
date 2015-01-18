@@ -5,12 +5,12 @@ efficient set operations. The space of integers is partitioned into blocks
 of 2 ** 16 integers. Depending on the number of elements each block contains,
 it is stored as either:
 
-	- an array of up to 1 << 12 shorts that are part of the set
-	- an array of up to 1 << 12 shorts that are not part of the set
-	- a bitmap of 2 << 16 bits with a 1-bit for each element in the set.
+	- <= 4096 elements: an array of up to 1 << 12 shorts part of the set.
+	- >= 61140 elements: an array of up to 1 << 12 shorts not part of the set.
+	- otherwise: a fixed bitmap of 1 << 16 (65536) bits with a 1-bit for each
+      element.
 """
 # TODOs
-# [ ] count whether array vs bitmap is better
 # [ ] in-place vs. new bitmap
 # [ ] additional operations: complement, shifts, get / set slices
 # [ ] check growth strategy of arrays
@@ -376,7 +376,7 @@ cdef class RoaringBitmap(object):
 	def __reversed__(self):
 		cdef Block block
 		for block in reversed(self.data):
-			for elem in reversed(list(block)):  # FIXME
+			for elem in reversed(block):
 				yield elem
 
 	def __bool__(self):
@@ -414,25 +414,41 @@ cdef class RoaringBitmap(object):
 		self.data.clear()
 
 	def pop(self):
-		"""Remove and return the smallest element."""
+		"""Remove and return the largest element."""
 		cdef Block block
 		if len(self.data) == 0:
 			raise ValueError
-		block = self.data[0]
+		block = self.data[len(self.data) - 1]
 		return block.pop()
 
 	def isdisjoint(self, other):
-		return len(self & other) == 0  # FIXME slow
-
-	def issubset(self, other):
 		cdef RoaringBitmap ob
+		cdef Block block
+		cdef int i = 0
 		if not isinstance(other, RoaringBitmap):
 			ob = RoaringBitmap(other)
 		else:
 			ob = other
-		# return self <= other
+		if len(self.data) == 0 or len(ob.data) == 0:
+			return True
+		for block in self.data:
+			i = ob._binarysearch(i, len(ob.data), block.key)
+			if i < 0:
+				i = -i -1
+				if i >= len(ob.data):
+					break
+			elif not block.isdisjoint(ob.data[i]):
+				return False
+		return True
+
+	def issubset(self, other):
+		cdef RoaringBitmap ob
 		cdef Block block
 		cdef int i = 0
+		if not isinstance(other, RoaringBitmap):
+			ob = RoaringBitmap(other)
+		else:
+			ob = other
 		if len(self.data) == 0:
 			return True
 		elif len(ob.data) == 0:
@@ -462,6 +478,37 @@ cdef class RoaringBitmap(object):
 
 	def symmetric_difference_update(self, other):
 		self ^= other
+
+	def rank(self, uint32_t x):
+		"""Return the number of elements ``<= x`` that are in this bitmap."""
+		cdef int size = 0
+		cdef uint16_t key
+		cdef Block block
+		cdef uint16_t xhigh = highbits(x)
+		for block in self.data:
+			key = block.key
+			if key < xhigh:
+				size += block.cardinality
+			elif key > xhigh:
+				return size
+			else:
+				return size + block.rank(lowbits(x))
+		return size
+
+	def select(self, int i):
+		"""Return the ith element that is in this bitmap.
+
+		:param i: a 1-based index."""
+		cdef int leftover = i
+		cdef uint32_t keycontrib, lowcontrib
+		cdef Block block
+		for block in self.data:
+			if block.cardinality > leftover:
+				keycontrib = block.key << 16
+				lowcontrib = block.select(leftover)
+				return keycontrib | lowcontrib
+			leftover -= block.cardinality
+		raise ValueError('select %d when cardinality is %d' % (i, len(self)))
 
 	@classmethod
 	def aggregateand(cls, bitmaps):

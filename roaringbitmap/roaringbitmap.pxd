@@ -7,7 +7,8 @@ from roaringbitmap.bit cimport iteratesetbits, iterateunsetbits, \
 		bitsetintersect, bitsetunion, bitsetsubtract, bitsetxor, \
 		bitsetintersectinplace, bitsetunioninplace, bitsubset, \
 		bitsetsubtractinplace, bitsetxorinplace, select64, \
-		anextset, anextunset, abitcount, abitlength, bit_popcount
+		anextset, anextunset, abitcount, abitlength, bit_popcount, \
+		reviteratesetbits
 
 cdef extern from "macros.h":
 	int BITSIZE

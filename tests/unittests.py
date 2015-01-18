@@ -3,6 +3,10 @@ from __future__ import division, print_function, absolute_import, \
         unicode_literals
 import random
 import pytest
+try:
+	from itertools import zip_longest
+except ImportError:
+	from itertools import izip_longest as zip_longest
 from roaringbitmap import RoaringBitmap
 
 # (numitems, maxnum)
@@ -99,6 +103,17 @@ class Test_roaringbitmap(object):
 			b = rb != rb2
 			assert a == b
 
+	def test_iter(self, single):
+		for data in single:
+			rb = RoaringBitmap(data)
+			assert list(iter(rb)) == sorted(set(data))
+
+	def test_reversed(self, single):
+		for data in single:
+			rb = RoaringBitmap(data)
+			for a, b in zip_longest(reversed(rb), reversed(sorted(set(data)))):
+				assert a == b
+
 	def test_iand(self, pair):
 		for data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
@@ -170,6 +185,17 @@ class Test_roaringbitmap(object):
 			assert ref <= ref2
 			assert rb <= rb2
 
+	def test_disjoint(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert not ref.isdisjoint(ref2)
+			assert not rb.isdisjoint(rb2)
+			data3 = [a for a in data2 if a not in ref]
+			ref3, rb3 = set(data3), RoaringBitmap(data3)
+			assert ref.isdisjoint(ref3)
+			assert rb.isdisjoint(rb3)
+
 	def test_aggregateand(self):
 		data = [[random.randint(0, 1000) for _ in range(2000)]
 				for _ in range(10)]
@@ -196,3 +222,46 @@ class Test_roaringbitmap(object):
 			ref ^= set(a)
 		rb = RoaringBitmap.aggregatexor([RoaringBitmap(a) for a in data])
 		assert ref == rb
+
+	def test_rank(self, single):
+		for data in single:
+			ref = sorted(set(data))
+			rb = RoaringBitmap(data)
+			print(len(rb))
+			for _ in range(10):
+				x = random.choice(ref)
+				assert x in rb
+				assert rb.rank(x) == ref.index(x) + 1
+
+	def test_select(self, single):
+		for data in single:
+			ref = sorted(set(data))
+			rb = RoaringBitmap(data)
+			lrb = list(rb)
+			idx = [random.randint(0, len(ref)) for _ in range(10)]
+			for i in idx:
+				assert lrb[i] == ref[i]
+				assert rb.select(i) in rb
+				assert rb.select(i) == ref[i]
+				assert rb.rank(rb.select(i)) - 1 == i
+				if rb.select(i) + 1 in rb:
+					assert rb.rank(rb.select(i) + 1) - 1 == i + 1
+				else:
+					assert rb.rank(rb.select(i) + 1) - 1 == i
+
+	def test_rank2(self):
+		rb = RoaringBitmap(range(0, 100000, 7))
+		rb.update(range(100000, 200000, 1000))
+		print(len(rb))
+		for k in range(100000):
+			assert rb.rank(k) == 1 + k // 7
+		for k in range(100000, 200000):
+			assert rb.rank(k) == 1 + 100000 // 7 + 1 + (k - 100000) // 1000
+
+	def test_select2(self):
+		gap = 1
+		while gap <= 1024:
+			rb = RoaringBitmap(range(0, 100000, gap))
+			for k in range(0, 100000 // gap):
+				assert rb.select(k) == k * gap
+			gap *= 2

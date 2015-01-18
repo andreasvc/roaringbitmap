@@ -457,9 +457,9 @@ cdef class Block(object):
 
 	cdef issubset(self, Block other):
 		cdef int n, m = 0
-		if self.cardinality > other.cardinality:
+		if self.key != other.key or self.cardinality > other.cardinality:
 			return False
-		if self.state == DENSE:
+		elif self.state == DENSE:
 			if other.state == DENSE:
 				return bitsubset(
 					self.buf.data.as_ulongs,
@@ -501,6 +501,9 @@ cdef class Block(object):
 							self.buf.data.as_ushorts[n])
 					if m >= 0:
 						return False
+					m = -m - 1
+					if m >= BLOCKSIZE - other.cardinality:
+						break
 			elif other.state == POSITIVE:
 				# check if self array elements are subset
 				# of other array elements
@@ -511,6 +514,109 @@ cdef class Block(object):
 					if m < 0:
 						return False
 		return True
+
+	cdef isdisjoint(self, Block other):
+		# could return counterexample, or -1 if True
+		cdef int n, m = 0
+		if (self.key != other.key
+				or self.cardinality + other.cardinality > BLOCKSIZE):
+			return False
+		elif self.state == POSITIVE:
+			if other.state == POSITIVE:
+				for n in range(self.cardinality):
+					m = binarysearch(other.buf.data.as_ushorts,
+							m, other.cardinality,
+							self.buf.data.as_ushorts[n])
+					if m >= 0:
+						return False
+					m = -m - 1
+					if m >= other.cardinality:
+						break
+			elif other.state == DENSE:
+				for n in range(self.cardinality):
+					if TESTBIT(other.buf.data.as_ulongs,
+							self.buf.data.as_ushorts[n]):
+						return False
+			elif other.state == INVERTED:
+				for n in range(self.cardinality):
+					m = binarysearch(other.buf.data.as_ushorts,
+							m, BLOCKSIZE - other.cardinality,
+							self.buf.data.as_ushorts[n])
+					if m < 0:
+						return False
+		elif self.state == DENSE:
+			if other.state == POSITIVE:
+				for n in range(other.cardinality):
+					if TESTBIT(self.buf.data.as_ulongs,
+							other.buf.data.as_ushorts[n]):
+						return False
+			elif other.state == DENSE:
+				for n in range(BITNSLOTS(BLOCKSIZE)):
+					if (self.buf.data.as_ulongs[n]
+							& other.buf.data.as_ulongs[n]):
+						return False
+			else:  # other.state == INVERTED:
+				return False
+		else:  # self.state == INVERTED:
+			if other.state == POSITIVE:
+				for n in range(other.cardinality):
+					m = binarysearch(self.buf.data.as_ushorts,
+							m, BLOCKSIZE - self.cardinality,
+							other.buf.data.as_ushorts[n])
+					if m < 0:
+						return False
+			else:  # other.state in (DENSE, INVERTED)
+				return False
+		return True
+
+	cdef int rank(self, uint16_t x):
+		"""Number of 1-bits in this bitmap ``<= x``."""
+		cdef int answer = 0
+		cdef int leftover
+		if self.state == POSITIVE:
+			answer = binarysearch(self.buf.data.as_ushorts,
+					0, self.cardinality, x)
+			if answer >= 0:
+				return answer + 1
+			else:
+				return -answer - 1
+		elif self.state == DENSE:
+			leftover = (x + 1) & (BITSIZE - 1)
+			for n in range(BITSLOT(x + 1)):
+				answer += bit_popcount(self.buf.data.as_ulongs[n])
+			if leftover != 0:
+				answer += bit_popcount(self.buf.data.as_ulongs[BITSLOT(x + 1)]
+						<< (BITSIZE - leftover))
+			return answer
+		elif self.state == INVERTED:
+			answer = binarysearch(self.buf.data.as_ushorts, 0,
+					self.cardinality, x)
+			if answer >= 0:
+				return x - answer - 1
+			else:
+				return x + answer - 1
+
+	cdef int select(self, int i):
+		"""Find smallest x s.t. rank(x) >= i."""
+		cdef int n, w = 0
+		if i >= self.cardinality:
+			raise IndexError('Index out of range.')
+		elif self.state == POSITIVE:
+			return self.buf.data.as_ushorts[i]
+		elif self.state == DENSE:
+			for n in range(BITMAPSIZE):
+				w = bit_popcount(self.buf.data.as_ulongs[n])
+				if w > i:
+					return BITSIZE * n + select64(
+							self.buf.data.as_ulongs[n], i)
+				i -= w
+		elif self.state == INVERTED:
+			for n in range(BLOCKSIZE - self.cardinality):
+				if self.buf.data.as_ulongs[n] - n >= i:
+					return self.buf.data.as_ushorts[n] - (
+							i - n)
+			return self.buf.data.as_ushorts[len(self.buf) - 1] + (
+					i - len(self.buf))
 
 	cdef todense(self):
 		# To dense bitvector
@@ -579,9 +685,8 @@ cdef class Block(object):
 
 	def __iter__(self):
 		cdef uint32_t high = self.key << 16
-		cdef uint32_t low = 0
 		cdef uint64_t cur
-		cdef int n, idx
+		cdef int n, idx, low
 		if self.cardinality == BLOCKSIZE:
 			for low in range(BLOCKSIZE):
 				yield high | low
@@ -612,11 +717,46 @@ cdef class Block(object):
 				low = self.buf.data.as_ushorts[n]
 				yield high | low
 
+	def __reversed__(self):
+		cdef uint32_t high = self.key << 16
+		cdef uint64_t cur
+		cdef int n, idx, low
+		if self.cardinality == BLOCKSIZE:
+			for low in reversed(range(BLOCKSIZE)):
+				yield high | low
+		elif self.state == POSITIVE:
+			for n in reversed(range(self.cardinality)):
+				low = self.buf.data.as_ushorts[n]
+				yield high | low
+		elif self.state == DENSE:
+			idx = BITNSLOTS(BLOCKSIZE) - 1
+			cur = self.buf.data.as_ulongs[idx]
+			n = reviteratesetbits(self.buf.data.as_ulongs, &cur, &idx)
+			while n != -1:
+				low = n
+				yield high | low
+				n = reviteratesetbits(self.buf.data.as_ulongs, &cur, &idx)
+		elif self.state == INVERTED:
+			for low in reversed(range(self.buf.data.as_ushorts[
+						BLOCKSIZE - self.cardinality - 1] + 1, BLOCKSIZE)):
+				yield high | low
+			if self.cardinality < BLOCKSIZE - 1:
+				for n in reversed(range(BLOCKSIZE - self.cardinality - 1)):
+					for low in reversed(range(
+							self.buf.data.as_ushorts[n] + 1,
+							self.buf.data.as_ushorts[n + 1])):
+						yield high | low
+			for low in reversed(range(self.buf.data.as_ushorts[0])):
+				yield high | low
+
 	def pop(self):
-		"""Remove and return the smallest element."""
+		"""Remove and return the largest element."""
 		if self.cardinality == 0:
 			raise ValueError
-		elem = next(iter(self))
+		if self.state == POSITIVE:
+			self.cardinality -= 1
+			return self.buf.pop()
+		elem = next(reversed(self))
 		self.discard(elem)
 		return elem
 

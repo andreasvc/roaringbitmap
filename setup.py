@@ -55,8 +55,9 @@ if __name__ == '__main__':
 	extensions = [Extension(
 			'*',
 			sources=['roaringbitmap/*.pyx'],
-			extra_compile_args=['-O3'],
-			# extra_link_args=[],
+			extra_compile_args=['-O3', '-DNDEBUG'],
+			# extra_compile_args=['-O0', '-g'],
+			# extra_link_args=['-g'],
 			# libraries=[],
 			# library_dirs=[os.environ['HOME'] + '/.local/lib'],
 			# include_dirs=[os.environ['HOME'] + '/.local/include'],

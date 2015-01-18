@@ -30,6 +30,12 @@ cdef extern from "bitcount.h":
 # 		uint64_t *src2, int slots)
 # cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
 # 		uint64_t *src2, int slots)
+# cdef inline int iteratesetbits(uint64_t *vec, int slots,
+# 		uint64_t *cur, int *idx)
+# cdef inline int iterateunsetbits(uint64_t *vec, int slots,
+# 		uint64_t *cur, int *idx)
+# cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx)
+
 
 cdef inline int abitcount(uint64_t *vec, int slots):
 	""" Return number of set bits in variable length bitvector """
@@ -94,8 +100,8 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 
 	e.g.::
 
-		uint64_t vec[4] = {0, 0, 0, 0b10001}, cur = vec[0]
 		int idx = 0
+		uint64_t vec[4] = {0, 0, 0, 0b10001}, cur = vec[idx]
 		iteratesetbits(vec, 4, &cur, &idx) # returns 0
 		iteratesetbits(vec, 4, &cur, &idx) # returns 4
 		iteratesetbits(vec, 4, &cur, &idx) # returns -1
@@ -106,8 +112,8 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 		if idx[0] >= slots:
 			return -1
 		cur[0] = vec[idx[0]]
-	tmp = bit_ctz(cur[0])  # index of 1-bit in current slot
-	CLEARBIT(cur, tmp)
+	tmp = bit_ctz(cur[0])  # index of right-most 1-bit in current slot
+	cur[0] &= ~(1UL << tmp)  # CLEARBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
@@ -120,8 +126,38 @@ cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 		if idx[0] >= slots:
 			return -1
 		cur[0] = vec[idx[0]]
-	tmp = bit_ctz(~cur[0])  # index of 0-bit in current slot
-	SETBIT(cur, tmp)
+	tmp = bit_ctz(~cur[0])  # index of right-most 0-bit in current slot
+	cur[0] |= (1UL << tmp)  # SETBIT(cur, tmp)
+	return idx[0] * BITSIZE + tmp
+
+
+cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx):
+	"""Iterate in reverse over set bits in an array of unsigned long.
+
+	:param cur and idx: pointers to variables to maintain state,
+		``idx`` should be initialized to ``slots - 1``, where slots is the
+		number of elements in unsigned long array ``vec``.
+		``cur`` should be initialized to the last element of
+		the bit array ``vec``, i.e., ``cur = vec[idx]``.
+	:returns: the index of a set bit, or -1 if there are no more set
+		bits. The result of calling a stopped iterator is undefined.
+
+	e.g.::
+
+		int idx = 3
+		uint64_t vec[4] = {0, 0, 0, 0b10001}, cur = vec[idx]
+		reviteratesetbits(vec, 4, &cur, &idx) # returns 4
+		reviteratesetbits(vec, 4, &cur, &idx) # returns 0
+		reviteratesetbits(vec, 4, &cur, &idx) # returns -1
+	"""
+	cdef int tmp
+	while not cur[0]:
+		idx[0] -= 1
+		if idx[0] < 0:
+			return -1
+		cur[0] = vec[idx[0]]
+	tmp = BITSIZE - bit_clz(cur[0]) - 1  # index of left-most 1-bit in cur
+	cur[0] &= ~(1UL << tmp)  # CLEARBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
@@ -242,7 +278,7 @@ cdef inline int select64(uint64_t w, int i):
 
 cdef inline int select32(uint32_t w, int i):
 	"""Given a 32-bit int w, return the position of the ith 1-bit."""
-	cdef uint64_t part1 =  w & 0xFFFF
+	cdef uint64_t part1 = w & 0xFFFF
 	cdef int wfirsthalf = bit_popcount(part1)
 	if wfirsthalf > i:
 		return select16(part1, i)
