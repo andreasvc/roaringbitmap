@@ -113,21 +113,23 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 			return -1
 		cur[0] = vec[idx[0]]
 	tmp = bit_ctz(cur[0])  # index of right-most 1-bit in current slot
-	cur[0] &= ~(1UL << tmp)  # CLEARBIT(cur, tmp)
+	cur[0] ^= 1UL << tmp  # TOGGLEBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
 cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 		uint64_t *cur, int *idx):
-	"""Like ``iteratesetbits``, but return indices of zero bits."""
+	"""Like ``iteratesetbits``, but return indices of zero bits.
+
+	:param cur: should be initialized as: ``cur = ~vec[idx]``."""
 	cdef int tmp
-	while ~cur[0] == 0:
+	while not cur[0]:
 		idx[0] += 1
 		if idx[0] >= slots:
 			return -1
-		cur[0] = vec[idx[0]]
-	tmp = bit_ctz(~cur[0])  # index of right-most 0-bit in current slot
-	cur[0] |= (1UL << tmp)  # SETBIT(cur, tmp)
+		cur[0] = ~vec[idx[0]]
+	tmp = bit_ctz(cur[0])  # index of right-most 0-bit in current slot
+	cur[0] ^= 1UL << tmp  # TOGGLEBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 

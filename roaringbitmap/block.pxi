@@ -666,13 +666,10 @@ cdef class Block(object):
 			tmp = array.clone(ushortarray, BLOCKSIZE - self.cardinality,
 					False)
 			idx = n = 0
-			cur = self.buf.data.as_ulongs[idx]
+			cur = ~self.buf.data.as_ulongs[idx]
 			elem = iterateunsetbits(self.buf.data.as_ulongs,
 					BITNSLOTS(BLOCKSIZE), &cur, &idx)
 			while elem != -1:
-				assert n < BLOCKSIZE - self.cardinality, (
-						elem, n, BLOCKSIZE - self.cardinality,
-						BLOCKSIZE, self.cardinality)
 				tmp.data.as_ushorts[n] = elem
 				n += 1
 				elem = iterateunsetbits(self.buf.data.as_ulongs,
