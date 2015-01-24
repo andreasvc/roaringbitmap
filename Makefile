@@ -19,7 +19,7 @@ lint:
 	pep8 --ignore=E1,W1 \
 			roaringbitmap/*.py tests/*.py \
 	&& pep8 --ignore=E1,W1,F,E901,E225,E227,E211 \
-			roaringbitmap/*.pyx roaringbitmap/*.pxd \
+			roaringbitmap/*.pyx roaringbitmap/*.pxd roaringbitmap/*.pxi
 
 py3:
 	python3 setup.py install --user

@@ -116,7 +116,7 @@ cdef class RoaringBitmap(object):
 		cdef Block b1, b2
 		if op == 2:  # ==
 			if not isinstance(self, RoaringBitmap):
-				return self == set(other)
+				return set(other) == self
 			elif not isinstance(other, RoaringBitmap):
 				return set(self) == other
 			ob1, ob2 = self, other
@@ -129,6 +129,8 @@ cdef class RoaringBitmap(object):
 				if b1.buf != b2.buf:
 					return False
 			return True
+		elif op == 3:  # !=
+			return not (self == other)
 		elif op == 1:  # <=
 			return self.issubset(other)
 		elif op == 5:  # >=
