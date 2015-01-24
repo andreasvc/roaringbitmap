@@ -62,6 +62,7 @@ cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 
 cdef int intersectgalloping(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest):
+	# data2 is the larger array
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length1 == 0:
 		return 0
@@ -80,7 +81,6 @@ cdef int intersectgalloping(uint16_t *data1, uint16_t *data2,
 			k2 += 1
 			if k2 == length1:
 				return pos
-			k2 += 1
 			k1 = advance(data2, k1, length2, data1[k2])
 			if k1 == length2:
 				return pos
