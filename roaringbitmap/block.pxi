@@ -133,12 +133,13 @@ cdef class Block(object):
 			self.state = DENSE
 			self.buf = tmp
 		elif self.state == POSITIVE and other.state == POSITIVE:
-			self.cardinality = intersect2by2(
+			length = intersect2by2(
 					self.buf.data.as_ushorts,
 					other.buf.data.as_ushorts,
 					self.cardinality, other.cardinality,
 					self.buf.data.as_ushorts)
-			array.resize(self.buf, self.cardinality)
+			array.resize(self.buf, length)
+			self.cardinality = length
 		elif self.state == INVERTED and other.state == INVERTED:
 			tmp = array.clone(ushortarray,
 					BLOCKSIZE - (self.cardinality + other.cardinality),

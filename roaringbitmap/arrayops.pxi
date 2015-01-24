@@ -23,9 +23,9 @@ cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem):
 cdef int intersect2by2(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest):
 	if length1 * 64 < length2:
-		return intersectgalloping(data1, data2, length1, length2, dest)
+		return intersectgalloping(data1, length1, data2, length2, dest)
 	elif length2 * 64 < length1:
-		return intersectgalloping(data2, data1, length2, length1, dest)
+		return intersectgalloping(data2, length2, data1, length1, dest)
 	return intersectlocal2by2(data1, data2, length1, length2, dest)
 
 
@@ -60,29 +60,30 @@ cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 				return pos
 
 
-cdef int intersectgalloping(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
-	# data2 is the larger array
+cdef int intersectgalloping(
+		uint16_t *small, int lensmall,
+		uint16_t *large, int lenlarge,
+		uint16_t *dest):
 	cdef int k1 = 0, k2 = 0, pos = 0
-	if length1 == 0:
+	if lensmall == 0:
 		return 0
 	while True:
-		if data2[k1] < data1[k2]:
-			k1 = advance(data2, k1, length2, data1[k2])
-			if k1 == length2:
+		if large[k1] < small[k2]:
+			k1 = advance(large, k1, lenlarge, small[k2])
+			if k1 == lenlarge:
 				return pos
-		if data1[k2] < data2[k1]:
+		if small[k2] < large[k1]:
 			k2 += 1
-			if k2 == length2:
+			if k2 == lensmall:
 				return pos
-		else:  # data2[k2] == data1[k1]
-			dest[pos] = data1[k2]
+		else:  # large[k2] == small[k1]
+			dest[pos] = small[k2]
 			pos += 1
 			k2 += 1
-			if k2 == length1:
+			if k2 == lensmall:
 				return pos
-			k1 = advance(data2, k1, length2, data1[k2])
-			if k1 == length2:
+			k1 = advance(large, k1, lenlarge, small[k2])
+			if k1 == lenlarge:
 				return pos
 
 
