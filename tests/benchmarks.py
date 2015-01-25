@@ -189,8 +189,10 @@ def main():
 				bench_sub,  # bench_isub,
 				bench_eq, bench_neq):
 			a, b = func()
+			ratio = a / b
 			print(fmt % (func.__name__.split('_', 1)[1].ljust(8),
-					numfmt % a, numfmt % b, numfmt % (a / b)))
+					numfmt % a, numfmt % b,
+					(numfmt % ratio) if ratio < 100 else int(ratio)))
 		print()
 
 if __name__ == '__main__':
