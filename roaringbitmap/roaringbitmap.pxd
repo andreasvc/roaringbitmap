@@ -20,7 +20,6 @@ cdef extern from "bitcount.h":
 	unsigned int bit_ctz(uint64_t)
 	unsigned int bit_popcount(uint64_t)
 
-
 cdef class RoaringBitmap(object):
 	cdef list data
 

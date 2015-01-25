@@ -206,9 +206,9 @@ class Test_roaringbitmap(object):
 		data = [[random.randint(0, 1000) for _ in range(2000)]
 				for _ in range(10)]
 		ref = set(data[0])
-		for a in data[1:]:
-			ref &= set(a)
-		rb = RoaringBitmap.aggregateand([RoaringBitmap(a) for a in data])
+		ref.intersection_update(*[set(a) for a in data[1:]])
+		rb = RoaringBitmap(data[0])
+		rb.intersection_update(*[RoaringBitmap(a) for a in data[1:]])
 		assert ref == set(rb)
 		assert rb == ref
 
@@ -216,19 +216,9 @@ class Test_roaringbitmap(object):
 		data = [[random.randint(0, 1000) for _ in range(2000)]
 				for _ in range(10)]
 		ref = set(data[0])
-		for a in data[1:]:
-			ref |= set(a)
-		rb = RoaringBitmap.aggregateor([RoaringBitmap(a) for a in data])
-		assert ref == set(rb)
-		assert rb == ref
-
-	def test_aggregatexor(self):
-		data = [[random.randint(0, 1000) for _ in range(2000)]
-				for _ in range(10)]
-		ref = set(data[0])
-		for a in data[1:]:
-			ref ^= set(a)
-		rb = RoaringBitmap.aggregatexor([RoaringBitmap(a) for a in data])
+		ref.update(*[set(a) for a in data[1:]])
+		rb = RoaringBitmap(data[0])
+		rb.update(*[RoaringBitmap(a) for a in data[1:]])
 		assert ref == set(rb)
 		assert rb == ref
 

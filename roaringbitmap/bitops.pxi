@@ -1,71 +1,20 @@
 # cdef inline functions defined here:
 # ===================================
-# cdef inline int abitcount(uint64_t *vec, int slots)
-# cdef inline int anextset(uint64_t *vec, uint32_t pos, int slots)
-# cdef inline int anextunset(uint64_t *vec, uint32_t pos, int slots)
-# cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots)
-# cdef inline void bitsetunioninplace(uint64_t *dest,
-# 		uint64_t *src, int slots)
-# cdef inline void bitsetintersectinplace(uint64_t *dest,
-# 		uint64_t *src, int slots)
-# cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1,
-# 		uint64_t *src2, int slots)
-# cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
-# 		uint64_t *src2, int slots)
 # cdef inline int iteratesetbits(uint64_t *vec, int slots,
 # 		uint64_t *cur, int *idx)
 # cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 # 		uint64_t *cur, int *idx)
 # cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx)
-
-
-cdef inline int abitcount(uint64_t *vec, int slots):
-	""" Return number of set bits in variable length bitvector """
-	cdef int a
-	cdef int result = 0
-	for a in range(slots):
-		result += bit_popcount(vec[a])
-	return result
-
-
-cdef inline int abitlength(uint64_t *vec, int slots):
-	"""Return number of bits needed to represent vector.
-
-	(equivalently: index of most significant set bit, plus one)."""
-	cdef int a = slots - 1
-	while a and not vec[a]:
-		a -= 1
-	return (a + 1) * sizeof(uint64_t) * 8 - bit_clz(vec[a])
-
-
-cdef inline int anextset(uint64_t *vec, uint32_t pos, int slots):
-	""" Return next set bit starting from pos, -1 if there is none. """
-	cdef int a = BITSLOT(pos)
-	cdef uint64_t x
-	if a >= slots:
-		return -1
-	x = vec[a] & (~0UL << (pos % BITSIZE))
-	while x == 0UL:
-		a += 1
-		if a == slots:
-			return -1
-		x = vec[a]
-	return a * BITSIZE + bit_ctz(x)
-
-
-cdef inline int anextunset(uint64_t *vec, uint32_t pos, int slots):
-	""" Return next unset bit starting from pos. """
-	cdef int a = BITSLOT(pos)
-	cdef uint64_t x
-	if a >= slots:
-		return a * BITSIZE
-	x = vec[a] | (BITMASK(pos) - 1)
-	while x == ~0UL:
-		a += 1
-		if a == slots:
-			return a * BITSIZE
-		x = vec[a]
-	return a * BITSIZE + bit_ctz(~x)
+# cdef inline void bitsetunioninplace(uint64_t *dest, uint64_t *src)
+# cdef inline void bitsetintersectinplace(uint64_t *dest, uint64_t *src)
+# cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1,
+# 		uint64_t *src2, int slots)
+# cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
+# 		uint64_t *src2, int slots)
+# cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots)
+# cdef inline int select64(uint64_t w, int i)
+# cdef inline int select32(uint32_t w, int i)
+# cdef inline int select16(uint16_t w, int i)
 
 
 cdef inline int iteratesetbits(uint64_t *vec, int slots,
@@ -145,58 +94,55 @@ cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx):
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src,
-		int slots):
+cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src):
 	"""dest gets the intersection of dest and src.
 
 	Returns number of set bits in result.
 	Both operands must have at least `slots' slots."""
-	cdef int a
+	cdef int n
 	cdef size_t result = 0
-	for a in range(slots):
-		dest[a] &= src[a]
-		result += bit_popcount(dest[a])
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] &= src[n]
+		result += bit_popcount(dest[n])
 	return result
 
 
-cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src, int slots):
+cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src):
 	"""dest gets the union of dest and src.
 
 	Returns number of set bits in result.
 	Both operands must have at least ``slots`` slots."""
-	cdef int a
+	cdef int n
 	cdef size_t result = 0
-	for a in range(slots):
-		dest[a] |= src[a]
-		result += bit_popcount(dest[a])
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] |= src[n]
+		result += bit_popcount(dest[n])
 	return result
 
 
-cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1,
-		int slots):
+cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1):
 	"""dest gets dest - src2.
 
 	Returns number of set bits in result.
 	Both operands must have at least ``slots`` slots."""
-	cdef int a
+	cdef int n
 	cdef size_t result = 0
-	for a in range(slots):
-		dest[a] &= ~src1[a]
-		result += bit_popcount(dest[a])
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] &= ~src1[n]
+		result += bit_popcount(dest[n])
 	return result
 
 
-cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1,
-		int slots):
+cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1):
 	"""dest gets dest ^ src2.
 
 	Returns number of set bits in result.
 	Both operands must have at least ``slots`` slots."""
-	cdef int a
+	cdef int n
 	cdef size_t result = 0
-	for a in range(slots):
-		dest[a] ^= src1[a]
-		result += bit_popcount(dest[a])
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] ^= src1[n]
+		result += bit_popcount(dest[n])
 	return result
 
 

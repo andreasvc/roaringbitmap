@@ -415,15 +415,6 @@ cdef class RoaringBitmap(object):
 	def union(self, other):
 		return self | other
 
-	def intersection_update(self, other):
-		self &= other
-
-	def union_update(self, other):
-		self |= other
-
-	def update(self, other):
-		self |= other
-
 	def clear(self):
 		self.data.clear()
 
@@ -484,11 +475,48 @@ cdef class RoaringBitmap(object):
 	def difference(self, other):
 		return self - other
 
-	def difference_update(self, other):
-		self -= other
-
 	def symmetric_difference(self, other):
 		return self ^ other
+
+	def intersection_update(self, *bitmaps):
+		"""Intersect this bitmap in-place with one or more ``RoaringBitmap``
+		objects."""
+		cdef RoaringBitmap bitmap
+		if len(bitmaps) == 0:
+			return self
+		elif len(bitmaps) == 1:
+			self &= bitmaps[0]
+			return self
+		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
+		for bitmap in bitmaps:
+			self &= bitmap
+		return self
+
+	def update(self, *bitmaps):
+		"""In-place union update of this bitmap.
+
+		With one argument, add items from any iterable to this bitmap;
+		with more arguments: add the union of given ``RoaringBitmap`` objects.
+		"""
+		cdef RoaringBitmap bitmap1, bitmap2
+		if len(bitmaps) == 0:
+			return self
+		if len(bitmaps) == 1:
+			self |= bitmaps[0]
+			return self
+		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
+		heapq.heapify(queue)
+		while len(queue) > 1:
+			_, bitmap1 = heapq.heappop(queue)
+			_, bitmap2 = heapq.heappop(queue)
+			result = bitmap1 | bitmap2
+			heapq.heappush(queue, (result.size(), result))
+		_, result = heapq.heappop(queue)
+		self |= result
+		return self
+
+	def difference_update(self, other):
+		self -= other
 
 	def symmetric_difference_update(self, other):
 		self ^= other
@@ -523,54 +551,6 @@ cdef class RoaringBitmap(object):
 				return keycontrib | lowcontrib
 			leftover -= block.cardinality
 		raise ValueError('select %d when cardinality is %d' % (i, len(self)))
-
-	@classmethod
-	def aggregateand(cls, bitmaps):
-		"""Compute the intersection of an iterable of ``RoaringBitmap``
-		objects."""
-		cdef RoaringBitmap bitmap
-		if len(bitmaps) == 0:
-			return RoaringBitmap()
-		elif len(bitmaps) == 1:
-			return bitmaps[0].copy()
-		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
-		result = bitmaps[0] & bitmaps[1]
-		for bitmap in bitmaps[2:]:
-			result &= bitmap
-		return result
-
-	@classmethod
-	def aggregateor(cls, bitmaps):
-		"""Compute the union of an iterable of ``RoaringBitmap`` objects."""
-		cdef RoaringBitmap bitmap1, bitmap2
-		if len(bitmaps) == 0:
-			return RoaringBitmap()
-		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
-		heapq.heapify(queue)
-		while len(queue) > 1:
-			_, bitmap1 = heapq.heappop(queue)
-			_, bitmap2 = heapq.heappop(queue)
-			result = bitmap1 | bitmap2
-			heapq.heappush(queue, (result.size(), result))
-		_, result = heapq.heappop(queue)
-		return result
-
-	@classmethod
-	def aggregatexor(cls, bitmaps):
-		"""Compute the symmetric difference of an iterable of
-		``RoaringBitmap`` objects."""
-		cdef RoaringBitmap bitmap1, bitmap2, result
-		if len(bitmaps) == 0:
-			return RoaringBitmap()
-		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
-		heapq.heapify(queue)
-		while len(queue) > 1:
-			_, bitmap1 = heapq.heappop(queue)
-			_, bitmap2 = heapq.heappop(queue)
-			result = bitmap1 ^ bitmap2
-			heapq.heappush(queue, (result.size(), result))
-		_, result = heapq.heappop(queue)
-		return result
 
 	def size(self):
 		"""Return memory used in bytes."""

@@ -105,8 +105,7 @@ cdef class Block(object):
 			elif other.state == DENSE:
 				self.cardinality = bitsetintersectinplace(
 						self.buf.data.as_ulongs,
-						other.buf.data.as_ulongs,
-						BITNSLOTS(BLOCKSIZE))
+						other.buf.data.as_ulongs)
 			elif other.state == INVERTED:
 				for n in range(BLOCKSIZE - other.cardinality):
 					if TESTBIT(self.buf.data.as_ulongs,
@@ -128,8 +127,7 @@ cdef class Block(object):
 							self.buf.data.as_ushorts[n])
 			self.cardinality = bitsetintersectinplace(
 					tmp.data.as_ulongs,
-					other.buf.data.as_ulongs,
-					BITNSLOTS(BLOCKSIZE))
+					other.buf.data.as_ulongs)
 			self.state = DENSE
 			self.buf = tmp
 		elif self.state == POSITIVE and other.state == POSITIVE:
@@ -227,8 +225,7 @@ cdef class Block(object):
 			elif other.state == DENSE:
 				self.cardinality = bitsetunioninplace(
 						self.buf.data.as_ulongs,
-						other.buf.data.as_ulongs,
-						BITNSLOTS(BLOCKSIZE))
+						other.buf.data.as_ulongs)
 			elif other.state == INVERTED:
 				tmp = array.copy(other.buf)
 				length = 0
@@ -280,8 +277,7 @@ cdef class Block(object):
 		if self.state == DENSE and other.state == DENSE:
 			self.cardinality = bitsetsubtractinplace(
 					self.buf.data.as_ulongs,
-					other.buf.data.as_ulongs,
-					BITNSLOTS(BLOCKSIZE))
+					other.buf.data.as_ulongs)
 		elif self.state == DENSE and other.state == INVERTED:
 			tmp2 = other.copy()
 			tmp2.todense()
@@ -353,8 +349,7 @@ cdef class Block(object):
 		if self.state == DENSE and other.state == DENSE:
 			self.cardinality = bitsetxorinplace(
 					self.buf.data.as_ulongs,
-					other.buf.data.as_ulongs,
-					BITNSLOTS(BLOCKSIZE))
+					other.buf.data.as_ulongs)
 		elif self.state == DENSE and other.state == INVERTED:
 			tmp2 = other.copy()
 			tmp2.todense()
