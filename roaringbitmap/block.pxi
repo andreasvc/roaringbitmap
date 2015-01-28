@@ -91,7 +91,7 @@ cdef class Block(object):
 		cdef int length, n
 		if self.state == DENSE:
 			if other.state == POSITIVE:
-				tmp = array.clone(ushortarray, 0, False)
+				tmp = array.clone(ushortarray, other.cardinality, False)
 				self.cardinality = 0
 				for n in range(other.cardinality):
 					if TESTBIT(self.buf.data.as_ulongs,
