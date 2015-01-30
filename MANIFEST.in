@@ -1,0 +1,4 @@
+include README.rst LICENSE setup.py
+recursive-include src *.py *.pyx *.pxi *.pxd *.h
+recursive-include tests *.py
+recursive-exclude src *.c
