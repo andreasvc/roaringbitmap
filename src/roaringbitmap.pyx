@@ -9,6 +9,13 @@ it is stored as either:
 	- >= 61140 elements: an array of up to 1 << 12 shorts not part of the set.
 	- otherwise: a fixed bitmap of 1 << 16 (65536) bits with a 1-bit for each
       element.
+
+A ``RoaringBitmap()`` can be used as a replacement for a normal (mutable)
+Python set containing (unsigned) 32-bit integers:
+
+>>> from roaringbitmap import RoaringBitmap
+>>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
+RoaringBitmap({5, 6, 7, 8, 9})
 """
 # TODOs
 # [ ] in-place vs. new bitmap
@@ -589,3 +596,6 @@ cdef inline uint16_t highbits(uint32_t x):
 
 cdef inline uint16_t lowbits(uint32_t x):
 	return x & 0xFFFF
+
+
+__all__ = ['RoaringBitmap']

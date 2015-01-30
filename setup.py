@@ -11,7 +11,7 @@ except ImportError as err:
 	sys.exit(1)
 
 metadata = dict(name='roaringbitmap',
-		version='0.1pre1',
+		version='0.1',
 		description='Roaring Bitmap',
 		long_description=open('README.rst').read(),
 		author='Andreas van Cranenburgh',
@@ -29,7 +29,6 @@ metadata = dict(name='roaringbitmap',
 		requires=[
 				'cython (>=0.20)',
 		],
-		packages=['roaringbitmap'],
 )
 
 # some of these directives increase performance,
@@ -54,13 +53,10 @@ if __name__ == '__main__':
 	os.environ['GCC_COLORS'] = 'auto'
 	extensions = [Extension(
 			'*',
-			sources=['roaringbitmap/*.pyx'],
+			sources=['src/*.pyx'],
 			extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
 			# extra_compile_args=['-O0', '-g'],
 			# extra_link_args=['-g'],
-			# libraries=[],
-			# library_dirs=[os.environ['HOME'] + '/.local/lib'],
-			# include_dirs=[os.environ['HOME'] + '/.local/include'],
 			)]
 	setup(
 			cmdclass=dict(build_ext=build_ext),
@@ -69,7 +65,5 @@ if __name__ == '__main__':
 					annotate=True,
 					compiler_directives=directives,
 					language_level=3,
-					# nthreads=4,
 			),
-			# test_suite = 'tests'
 			**metadata)
