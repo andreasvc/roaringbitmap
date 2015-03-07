@@ -1,10 +1,13 @@
+MANIFEST
+src/.*.swp
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 
 # Cython-generated files
-roaringbitmap/*.c
-roaringbitmap/*.html
+src/*.c
+src/*.html
 
 # C extensions
 *.so

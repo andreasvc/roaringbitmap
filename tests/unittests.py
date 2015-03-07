@@ -10,9 +10,10 @@ except ImportError:
 from roaringbitmap import RoaringBitmap
 
 # (numitems, maxnum)
-PARAMS = [(200, 40000),
-	(40000 - 200, 40000),
-	(59392, 118784),
+PARAMS = [
+	(200, 65535),
+	(65535 - 200, 65535),
+	(40000, 65535),
 	(40000, 1 << 31)]
 
 

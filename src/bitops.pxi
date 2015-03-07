@@ -44,7 +44,7 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 			return -1
 		cur[0] = vec[idx[0]]
 	tmp = bit_ctz(cur[0])  # index of right-most 1-bit in current slot
-	cur[0] ^= 1UL << tmp  # TOGGLEBIT(cur, tmp)
+	cur[0] ^= 1ULL << tmp  # TOGGLEBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
@@ -60,7 +60,7 @@ cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 			return -1
 		cur[0] = ~vec[idx[0]]
 	tmp = bit_ctz(cur[0])  # index of right-most 0-bit in current slot
-	cur[0] ^= 1UL << tmp  # TOGGLEBIT(cur, tmp)
+	cur[0] ^= 1ULL << tmp  # TOGGLEBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 
@@ -90,7 +90,7 @@ cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx):
 			return -1
 		cur[0] = vec[idx[0]]
 	tmp = BITSIZE - bit_clz(cur[0]) - 1  # index of left-most 1-bit in cur
-	cur[0] &= ~(1UL << tmp)  # CLEARBIT(cur, tmp)
+	cur[0] &= ~(1ULL << tmp)  # CLEARBIT(cur, tmp)
 	return idx[0] * BITSIZE + tmp
 
 

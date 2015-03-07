@@ -33,9 +33,10 @@ cimport cython
 # The maximum number of elements in a block
 DEF BLOCKSIZE = 1 << 16
 
-# The number of shorts to store a bitmap of 2**16 bits:
-DEF BITMAPSIZE = BLOCKSIZE // 16
+# The number of bytes to store a bitmap of 2**16 bits:
+DEF BITMAPSIZE = BLOCKSIZE // 8
 
+# Maximum length of positive/inverted sparse arrays:
 DEF MAXARRAYLENGTH = 1 << 12
 
 # The different ways a block may store its elements:
@@ -68,6 +69,7 @@ cdef class RoaringBitmap(object):
 						block = self.data[i]
 					else:
 						block = new_Block(key)
+						block.allocarray()
 						self.data.append(block)
 					prev = key
 				block.add(lowbits(elem))
@@ -87,6 +89,7 @@ cdef class RoaringBitmap(object):
 			block = self.data[i]
 		else:
 			block = new_Block(key)
+			block.allocarray()
 			self.data.insert(-i - 1, block)
 		block.add(lowbits(elem))
 
@@ -133,7 +136,10 @@ cdef class RoaringBitmap(object):
 						or b1.state != b2.state):
 					return False
 			for b1, b2 in zip(ob1.data, ob2.data):
-				if b1.buf != b2.buf:
+				if b1.state == DENSE:
+					if memcmp(b1.bitmap, b2.bitmap, BITMAPSIZE) != 0:
+						return False
+				elif b1.buf != b2.buf:
 					return False
 			return True
 		elif op == 3:  # !=

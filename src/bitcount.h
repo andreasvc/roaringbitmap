@@ -27,7 +27,7 @@ extern "C" {
 
 #ifdef BITCOUNT_VS_X86
 #include <intrin.h>
-#pragma intrinsic(_BitScanForward,_BitScanReverse,__popcnt)
+#pragma intrinsic(_BitScanForward64,_BitScanReverse64,__popcnt64)
 #endif
 
 #include <limits.h>
@@ -43,10 +43,10 @@ unsigned int bit_popcount_general(uint64_t);
    bit position. If v is 0, the result is undefined. */
 BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
-	return __builtin_clzl(v);
+	return __builtin_clzll(v);
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
-	_BitScanReverse(&result, v);
+	_BitScanReverse64(&result, v);
 	return BITCOUNT_BITS - 1 - result;
 	#else
 	return bit_clz_general(v);
@@ -57,10 +57,10 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
    bit position. If v is 0, the result is undefined. */
 BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
-	return __builtin_ctzl(v);
+	return __builtin_ctzll(v);
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
-	_BitScanForward(&result, v);
+	_BitScanForward64(&result, v);
 	return result;
 	#else
 	return bit_ctz_general(v);
@@ -70,9 +70,9 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 /* Returns the number of 1-bits in v. */
 BITCOUNT_INLINE unsigned int bit_popcount(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
-	return __builtin_popcountl(v);
+	return __builtin_popcountll(v);
 	#elif defined(BITCOUNT_VS_X86)
-	return __popcnt(v);
+	return __popcnt64(v);
 	#else
 	return bit_popcount_general(v);
 	#endif

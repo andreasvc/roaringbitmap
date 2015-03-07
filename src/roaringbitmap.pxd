@@ -1,5 +1,7 @@
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
-from libc.string cimport memset, memcpy
+from libc.string cimport memset, memcpy, memcmp
+from posix.stdlib cimport posix_memalign
+from libc.stdlib cimport free
 
 cimport cython
 from cpython cimport array
