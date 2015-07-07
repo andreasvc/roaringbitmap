@@ -417,10 +417,13 @@ cdef class RoaringBitmap(object):
 		return 'RoaringBitmap({%s})' % repr(list(self)).strip('[]')
 
 	def __reduce__(self):
-		return (RoaringBitmap, None, self.data)
+		return (RoaringBitmap, (
+			array.array('L' if sys.version[0] >= '3' else b'L', self), ))
+		# broken:
+		# return (RoaringBitmap, (), dict(data=self.data))
 
-	def __setstate__(self, data):
-		self.data = data
+	# def __setstate__(self, state):
+	# 	self.data = state['data']
 
 	def intersection(self, other):
 		return self & other

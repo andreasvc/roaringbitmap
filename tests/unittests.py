@@ -3,6 +3,7 @@ from __future__ import division, print_function, absolute_import, \
         unicode_literals
 import random
 import pytest
+import pickle
 try:
 	from itertools import zip_longest
 except ImportError:
@@ -265,3 +266,10 @@ class Test_roaringbitmap(object):
 			for k in range(0, 100000 // gap):
 				assert rb.select(k) == k * gap
 			gap *= 2
+
+	def test_pickle(self, single):
+		for data in single:
+			rb = RoaringBitmap(data)
+			rb_pickled = pickle.dumps(rb, protocol=-1)
+			rb_unpickled = pickle.loads(rb_pickled)
+			assert rb_unpickled == rb

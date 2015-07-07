@@ -801,14 +801,25 @@ cdef class Block(object):
 			self.bitmap = NULL
 
 	def __reduce__(self):
-		return (Block, None, (self.key, self.state,
-				self.cardinality, self.buf))
+		return (Block, (), dict(
+				key=self.key,
+				state=self.state,
+				cardinality=self.cardinality,
+				buf=None if self.state == DENSE else self.buf,
+				bitmap=(<bytes>((<char *>self.bitmap)[:BITMAPSIZE])))
+						if self.state == DENSE else None)
 
-	def __setstate__(self, key, state, cardinality, buf):
-		self.key = key
-		self.state = state
-		self.cardinality = cardinality
-		self.buf = buf
+	def __setstate__(self, state):
+		self.key = state['key']
+		self.state = state['state']
+		self.cardinality = state['cardinality']
+		if self.state == DENSE:
+			self.buf = None
+			self.allocbitmap()
+			memcpy(self.bitmap, <char *><bytes>(state['bitmap']), BITMAPSIZE)
+		else:
+			self.buf = state['buf']
+			self.bitmap = NULL
 
 
 cdef inline int min(int a, int b):
