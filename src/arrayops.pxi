@@ -100,9 +100,9 @@ cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem):
 		return upper
 	if data[upper] < minitem:
 		return length
-	lower += spansize // 2
+	lower += spansize >> 1
 	while lower + 1 != upper:
-		mid = (lower + upper) // 2
+		mid = (<unsigned int>lower + <unsigned int>upper) >> 1
 		if data[mid] == minitem:
 			return mid
 		elif data[mid] < minitem:
