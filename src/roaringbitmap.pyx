@@ -136,10 +136,7 @@ cdef class RoaringBitmap(object):
 						or b1.state != b2.state):
 					return False
 			for b1, b2 in zip(ob1.data, ob2.data):
-				if b1.state == DENSE:
-					if memcmp(b1.bitmap, b2.bitmap, BITMAPSIZE) != 0:
-						return False
-				elif b1.buf != b2.buf:
+				if b1.buf != b2.buf:
 					return False
 			return True
 		elif op == 3:  # !=
@@ -417,13 +414,10 @@ cdef class RoaringBitmap(object):
 		return 'RoaringBitmap({%s})' % repr(list(self)).strip('[]')
 
 	def __reduce__(self):
-		return (RoaringBitmap, (
-			array.array('L' if sys.version[0] >= '3' else b'L', self), ))
-		# broken:
-		# return (RoaringBitmap, (), dict(data=self.data))
+		return (RoaringBitmap, (), dict(data=self.data))
 
-	# def __setstate__(self, state):
-	# 	self.data = state['data']
+	def __setstate__(self, state):
+		self.data = state['data']
 
 	def intersection(self, other):
 		return self & other
