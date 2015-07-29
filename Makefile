@@ -1,5 +1,5 @@
 all:
-	python setup.py install --user
+	python setup.py install --user --with-cython
 
 clean:
 	rm -rf build/
@@ -21,7 +21,7 @@ lint:
 			src/*.pyx src/*.pxd src/*.pxi
 
 py3:
-	python3 setup.py install --user
+	python3 setup.py install --user --with-cython
 
 test3: py3
 	python3 `which py.test` tests/unittests.py

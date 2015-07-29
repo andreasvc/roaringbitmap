@@ -6,9 +6,15 @@ from distutils.extension import Extension
 try:
 	from Cython.Build import cythonize
 	from Cython.Distutils import build_ext
-except ImportError as err:
-	print('ERROR: Cython not found.')
-	sys.exit(1)
+	USE_CYTHON = '--with-cython' in sys.argv
+except ImportError:
+	USE_CYTHON = False
+	assert '--with-cython' not in sys.argv, 'Cython not found.'
+try:
+	sys.argv.remove('--with-cython')
+except ValueError:
+	pass
+
 
 metadata = dict(name='roaringbitmap',
 		version='0.2',
@@ -25,9 +31,6 @@ metadata = dict(name='roaringbitmap',
 				'Programming Language :: Python :: 2.7',
 				'Programming Language :: Python :: 3.3',
 				'Programming Language :: Cython',
-		],
-		requires=[
-				'cython (>=0.20)',
 		],
 )
 
@@ -51,19 +54,27 @@ directives = {
 
 if __name__ == '__main__':
 	os.environ['GCC_COLORS'] = 'auto'
-	extensions = [Extension(
-			'*',
-			sources=['src/*.pyx'],
-			extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
-			# extra_compile_args=['-O0', '-g'],
-			# extra_link_args=['-g'],
-			)]
+	if USE_CYTHON:
+		extensions = [Extension(
+				'*',
+				sources=['src/*.pyx'],
+				extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
+				# extra_compile_args=['-O0', '-g'],
+				# extra_link_args=['-g'],
+				)]
+		ext_modules = cythonize(
+				extensions,
+				annotate=True,
+				compiler_directives=directives,
+				language_level=3,
+		)
+	else:
+		ext_modules = [Extension(
+				'roaringbitmap',
+				sources=['src/roaringbitmap.c'],
+				extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
+				)]
 	setup(
 			cmdclass=dict(build_ext=build_ext),
-			ext_modules=cythonize(
-					extensions,
-					annotate=True,
-					compiler_directives=directives,
-					language_level=3,
-			),
+			ext_modules=ext_modules,
 			**metadata)
