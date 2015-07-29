@@ -11,7 +11,7 @@ except ImportError as err:
 	sys.exit(1)
 
 metadata = dict(name='roaringbitmap',
-		version='0.1',
+		version='0.2',
 		description='Roaring Bitmap',
 		long_description=open('README.rst').read(),
 		author='Andreas van Cranenburgh',

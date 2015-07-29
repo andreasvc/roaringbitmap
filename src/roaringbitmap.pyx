@@ -5,13 +5,17 @@ efficient set operations. The space of integers is partitioned into blocks
 of 2 ** 16 integers. Depending on the number of elements each block contains,
 it is stored as either:
 
-	- <= 4096 elements: an array of up to 1 << 12 shorts part of the set.
-	- >= 61140 elements: an array of up to 1 << 12 shorts not part of the set.
-	- otherwise: a fixed bitmap of 1 << 16 (65536) bits with a 1-bit for each
-      element.
+<= 4096 elements:
+	an array of up to 1 << 12 shorts part of the set.
 
-A ``RoaringBitmap()`` can be used as a replacement for a normal (mutable)
-Python set containing (unsigned) 32-bit integers:
+>= 61140 elements:
+	an array of up to 1 << 12 shorts not part of the set.
+
+otherwise:
+	a fixed bitmap of 1 << 16 (65536) bits with a 1-bit for each element.
+
+A ``RoaringBitmap`` can be used as a replacement for a mutable
+Python ``set`` containing unsigned 32-bit integers:
 
 >>> from roaringbitmap import RoaringBitmap
 >>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
@@ -19,11 +23,17 @@ RoaringBitmap({5, 6, 7, 8, 9})
 """
 # TODOs
 # [ ] in-place vs. new bitmap
+# [ ] subclass Set ABC?
+# [ ] sequence API? (bitarray vs. bitset)
 # [ ] additional operations: complement, shifts, get / set slices
 # [ ] check growth strategy of arrays
-# [ ] constructor for range
+# [ ] constructor for range (set slice)
+#     - init with range: RoaringBitmap(range(2, 4))
+#     - set slice: a[2:4] = True
+#     - intersect/union/... inplace with range: a &= range(2, 4)
 # [ ] error checking
 # [ ] serialization compatible with original Roaring bitmap
+
 
 import sys
 import heapq
@@ -55,6 +65,10 @@ include "block.pxi"
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
 	def __init__(self, iterable=None):
+		"""Return a new RoaringBitmap whose elements are taken from
+		``iterable``. The elements ``x`` of a RoaringBitmap must be
+		``0 <= x < 2 ** 32``.  If ``iterable`` is not specified, a new empty
+		RoaringBitmap is returned."""
 		cdef Block block = None
 		cdef uint32_t elem
 		cdef uint16_t key
@@ -73,45 +87,6 @@ cdef class RoaringBitmap(object):
 						self.data.append(block)
 					prev = key
 				block.add(lowbits(elem))
-
-	def copy(self):
-		cdef RoaringBitmap answer = RoaringBitmap()
-		cdef Block block
-		for block in self.data:
-			answer.data.append(block.copy())
-		return answer
-
-	def add(self, uint32_t elem):
-		cdef Block block
-		cdef uint16_t key = highbits(elem)
-		cdef int i = self._getindex(key)
-		if i >= 0:
-			block = self.data[i]
-		else:
-			block = new_Block(key)
-			block.allocarray()
-			self.data.insert(-i - 1, block)
-		block.add(lowbits(elem))
-
-	def discard(self, uint32_t elem):
-		cdef int i = self._getindex(highbits(elem))
-		cdef Block block
-		if i >= 0:
-			block = self.data[i]
-			block.discard(lowbits(elem))
-			if block.cardinality == 0:
-				del self.data[i]
-
-	def remove(self, uint32_t elem):
-		cdef Block block
-		cdef int i = self._getindex(highbits(elem))
-		if i >= 0:
-			block = self.data[i]
-			block.discard(lowbits(elem))
-			if block.cardinality == 0:
-				del self.data[i]
-		else:
-			raise KeyError(elem)
 
 	def __contains__(self, uint32_t elem):
 		cdef int i = self._getindex(highbits(elem))
@@ -419,14 +394,58 @@ cdef class RoaringBitmap(object):
 	def __setstate__(self, state):
 		self.data = state['data']
 
-	def intersection(self, other):
-		return self & other
-
-	def union(self, other):
-		return self | other
-
 	def clear(self):
+		"""Remove all elements from this RoaringBitmap."""
 		self.data.clear()
+
+	def copy(self):
+		"""Return a copy of this RoaringBitmap."""
+		cdef RoaringBitmap answer = RoaringBitmap()
+		cdef Block block
+		for block in self.data:
+			answer.data.append(block.copy())
+		return answer
+
+	def add(self, uint32_t elem):
+		"""Add an element to the bitmap.
+
+		This has no effect if the element is already present."""
+		cdef Block block
+		cdef uint16_t key = highbits(elem)
+		cdef int i = self._getindex(key)
+		if i >= 0:
+			block = self.data[i]
+		else:
+			block = new_Block(key)
+			block.allocarray()
+			self.data.insert(-i - 1, block)
+		block.add(lowbits(elem))
+
+	def discard(self, uint32_t elem):
+		"""Remove an element from the bitmap if it is a member.
+
+		If the element is not a member, do nothing."""
+		cdef int i = self._getindex(highbits(elem))
+		cdef Block block
+		if i >= 0:
+			block = self.data[i]
+			block.discard(lowbits(elem))
+			if block.cardinality == 0:
+				del self.data[i]
+
+	def remove(self, uint32_t elem):
+		"""Remove an element from the bitmap; it must be a member.
+
+		If the element is not a member, raise a KeyError."""
+		cdef Block block
+		cdef int i = self._getindex(highbits(elem))
+		if i >= 0:
+			block = self.data[i]
+			block.discard(lowbits(elem))
+			if block.cardinality == 0:
+				del self.data[i]
+		else:
+			raise KeyError(elem)
 
 	def pop(self):
 		"""Remove and return the largest element."""
@@ -437,6 +456,7 @@ cdef class RoaringBitmap(object):
 		return block.pop()
 
 	def isdisjoint(self, other):
+		"""Return True if two RoaringBitmaps have a null intersection."""
 		cdef RoaringBitmap ob
 		cdef Block block
 		cdef int i = 0
@@ -457,6 +477,7 @@ cdef class RoaringBitmap(object):
 		return True
 
 	def issubset(self, other):
+		"""Report whether another set contains this RoaringBitmap."""
 		cdef RoaringBitmap ob
 		cdef Block block
 		cdef int i = 0
@@ -480,40 +501,59 @@ cdef class RoaringBitmap(object):
 		return True
 
 	def issuperset(self, other):
+		"""Report whether this RoaringBitmap contains another set."""
 		return other.issubset(self)
 
-	def difference(self, other):
-		return self - other
+	def intersection(self, *other):
+		"""Return the intersection of two or more sets as a new RoaringBitmap.
+
+		(i.e. elements that are common to all of the sets.)"""
+		cdef RoaringBitmap ob
+		if len(other) == 1:
+			return self & other[0]
+		ob = self.copy()
+		ob.intersection_update(other)
+		return ob
+
+	def union(self, *other):
+		"""Return the union of two or more sets as a new set.
+
+		(i.e. all elements that are in at least one of the sets.)"""
+		cdef RoaringBitmap ob
+		if len(other) == 1:
+			return self | other[0]
+		ob = self.copy()
+		ob.update(other)
+		return ob
+
+	def difference(self, *other):
+		"""Return the difference of two or more sets as a new RoaringBitmap.
+
+		(i.e, self - other[0] - other[1] - ...)"""
+		cdef RoaringBitmap bitmap
+		cdef RoaringBitmap ob = self.copy()
+		for bitmap in other:
+			ob -= bitmap
+		return ob
 
 	def symmetric_difference(self, other):
+		"""Return the symmetric difference of two sets as a new RoaringBitmap.
+
+		(i.e. all elements that are in exactly one of the sets.)"""
 		return self ^ other
 
-	def intersection_update(self, *bitmaps):
-		"""Intersect this bitmap in-place with one or more ``RoaringBitmap``
-		objects."""
-		cdef RoaringBitmap bitmap
-		if len(bitmaps) == 0:
-			return self
-		elif len(bitmaps) == 1:
-			self &= bitmaps[0]
-			return self
-		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
-		for bitmap in bitmaps:
-			self &= bitmap
-		return self
-
 	def update(self, *bitmaps):
-		"""In-place union update of this bitmap.
+		"""In-place union update of this RoaringBitmap.
 
 		With one argument, add items from any iterable to this bitmap;
 		with more arguments: add the union of given ``RoaringBitmap`` objects.
 		"""
 		cdef RoaringBitmap bitmap1, bitmap2
 		if len(bitmaps) == 0:
-			return self
+			return
 		if len(bitmaps) == 1:
 			self |= bitmaps[0]
-			return self
+			return
 		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
 		heapq.heapify(queue)
 		while len(queue) > 1:
@@ -523,12 +563,27 @@ cdef class RoaringBitmap(object):
 			heapq.heappush(queue, (result.size(), result))
 		_, result = heapq.heappop(queue)
 		self |= result
-		return self
 
-	def difference_update(self, other):
-		self -= other
+	def intersection_update(self, *bitmaps):
+		"""Intersect this bitmap in-place with one or more ``RoaringBitmap``
+		objects."""
+		cdef RoaringBitmap bitmap
+		if len(bitmaps) == 0:
+			return
+		elif len(bitmaps) == 1:
+			self &= bitmaps[0]
+			return
+		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
+		for bitmap in bitmaps:
+			self &= bitmap
+
+	def difference_update(self, *other):
+		"""Remove all elements of other RoaringBitmaps from this one."""
+		for bitmap in other:
+			self -= bitmap
 
 	def symmetric_difference_update(self, other):
+		"""Update bitmap to symmetric difference of itself and another."""
 		self ^= other
 
 	def rank(self, uint32_t x):
@@ -563,7 +618,7 @@ cdef class RoaringBitmap(object):
 		raise ValueError('select %d when cardinality is %d' % (i, len(self)))
 
 	def size(self):
-		"""Return memory used in bytes."""
+		"""Return approximate memory usage in bytes."""
 		return sum(map(Block.size, self.data))
 
 	cdef int _getindex(self, uint16_t key):
