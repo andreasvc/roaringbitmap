@@ -394,6 +394,10 @@ cdef class RoaringBitmap(object):
 	def __setstate__(self, state):
 		self.data = state['data']
 
+	def __sizeof__(self):
+		"""Return memory usage in bytes."""
+		return sys.getsizeof(self.data) + sum(map(Block.__sizeof__, self.data))
+
 	def clear(self):
 		"""Remove all elements from this RoaringBitmap."""
 		self.data.clear()
@@ -554,13 +558,13 @@ cdef class RoaringBitmap(object):
 		if len(bitmaps) == 1:
 			self |= bitmaps[0]
 			return
-		queue = [(bitmap1.size(), bitmap1) for bitmap1 in bitmaps]
+		queue = [(bitmap1.__sizeof__(), bitmap1) for bitmap1 in bitmaps]
 		heapq.heapify(queue)
 		while len(queue) > 1:
 			_, bitmap1 = heapq.heappop(queue)
 			_, bitmap2 = heapq.heappop(queue)
 			result = bitmap1 | bitmap2
-			heapq.heappush(queue, (result.size(), result))
+			heapq.heappush(queue, (result.__sizeof__(), result))
 		_, result = heapq.heappop(queue)
 		self |= result
 
@@ -573,7 +577,7 @@ cdef class RoaringBitmap(object):
 		elif len(bitmaps) == 1:
 			self &= bitmaps[0]
 			return
-		bitmaps = sorted(bitmaps, key=RoaringBitmap.size)
+		bitmaps = sorted(bitmaps, key=RoaringBitmap.__sizeof__)
 		for bitmap in bitmaps:
 			self &= bitmap
 
@@ -616,10 +620,6 @@ cdef class RoaringBitmap(object):
 				return keycontrib | lowcontrib
 			leftover -= block.cardinality
 		raise ValueError('select %d when cardinality is %d' % (i, len(self)))
-
-	def size(self):
-		"""Return approximate memory usage in bytes."""
-		return sum(map(Block.size, self.data))
 
 	cdef int _getindex(self, uint16_t key):
 		cdef Block block

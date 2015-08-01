@@ -623,11 +623,10 @@ cdef class Block(object):
 				# shouldn't happen?
 				raise ValueError
 
-	def size(self):
-		"""Return memory usage."""
-		if self.state == DENSE:
-			return BITMAPSIZE
-		return sizeof(uint16_t) * len(self.buf)
+	def __sizeof__(self):
+		"""Return memory usage in bytes."""
+		return (sizeof(self.state) + sizeof(self.key)
+				+ sizeof(self.cardinality) + sys.getsizeof(self.buf))
 
 	cdef todense(self):
 		# To dense bitvector
