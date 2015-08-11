@@ -3,9 +3,11 @@ import os
 import sys
 from distutils.core import setup
 from distutils.extension import Extension
-USE_CYTHON = '--with-cython' in sys.argv
+USE_CYTHON = '--with-cython' in sys.argv or not os.path.exists(
+		'src/roaringbitmap.c')
 if USE_CYTHON:
-	sys.argv.remove('--with-cython')
+	if '--with-cython' in sys.argv:
+		sys.argv.remove('--with-cython')
 	try:
 		from Cython.Build import cythonize
 		from Cython.Distutils import build_ext
