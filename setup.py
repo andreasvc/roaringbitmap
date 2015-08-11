@@ -3,21 +3,20 @@ import os
 import sys
 from distutils.core import setup
 from distutils.extension import Extension
-try:
-	from Cython.Build import cythonize
-	from Cython.Distutils import build_ext
-	USE_CYTHON = '--with-cython' in sys.argv
-except ImportError:
-	USE_CYTHON = False
-	assert '--with-cython' not in sys.argv, 'Cython not found.'
-try:
+USE_CYTHON = '--with-cython' in sys.argv
+if USE_CYTHON:
 	sys.argv.remove('--with-cython')
-except ValueError:
-	pass
-
+	try:
+		from Cython.Build import cythonize
+		from Cython.Distutils import build_ext
+	except ImportError:
+		raise ValueError('could not import Cython.')
+	cmdclass = dict(build_ext=build_ext)
+else:
+	cmdclass = dict()
 
 metadata = dict(name='roaringbitmap',
-		version='0.2',
+		version='0.3',
 		description='Roaring Bitmap',
 		long_description=open('README.rst').read(),
 		author='Andreas van Cranenburgh',
@@ -75,6 +74,6 @@ if __name__ == '__main__':
 				extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
 				)]
 	setup(
-			cmdclass=dict(build_ext=build_ext),
+			cmdclass=cmdclass,
 			ext_modules=ext_modules,
 			**metadata)
