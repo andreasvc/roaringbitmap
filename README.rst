@@ -39,7 +39,7 @@ Python set containing (unsigned) 32-bit integers::
     >>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
     RoaringBitmap({5, 6, 7, 8, 9})
 
-For API documentation cf. https://pythonhosted.org/roaringbitmap/
+For API documentation cf. http://roaringbitmap.readthedocs.org
 
 Benchmarks
 ----------
