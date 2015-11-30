@@ -21,6 +21,10 @@ stored just as compactly as blocks that are mostly empty. Other blocks are
 encoded as bitmaps of fixed size. This trick is based on the implementation in
 Lucene, cf. https://issues.apache.org/jira/browse/LUCENE-5983
 
+License
+-------
+This code is licensed under GNU GPL v2, or any later version at your option.
+
 Requirements
 ------------
 - Python 2.7+/3   http://www.python.org (headers required, e.g. python-dev package)
