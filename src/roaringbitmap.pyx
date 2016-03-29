@@ -590,6 +590,49 @@ cdef class RoaringBitmap(object):
 		"""Update bitmap to symmetric difference of itself and another."""
 		self ^= other
 
+	def intersection_len(self, other):
+		"""Return the cardinality of the intersection.
+
+		Optimized version of ``len(self & other)``."""
+		cdef RoaringBitmap ob1, ob2
+		cdef Block block1, block2
+		cdef int length1, length2, result = 0
+		cdef int pos1 = 0, pos2 = 0
+		cdef uint16_t key1, key2
+		if not isinstance(self, RoaringBitmap):
+			ob1, ob2 = RoaringBitmap(self), other
+		elif not isinstance(other, RoaringBitmap):
+			ob1, ob2 = self, RoaringBitmap(other)
+		else:
+			ob1, ob2 = self, other
+		length1, length2 = len(ob1.data), len(ob2.data)
+		if pos1 < length1 and pos2 < length2:
+			block1, block2 = ob1.data[pos1], ob2.data[pos2]
+			key1, key2 = block1.key, block2.key
+			while True:
+				if key1 < key2:
+					pos1 += 1
+					if pos1 == length1:
+						break
+					block1 = ob1.data[pos1]
+					key1 = block1.key
+				elif key1 > key2:
+					pos2 += 1
+					if pos2 == length2:
+						break
+					block2 = ob2.data[pos2]
+					key2 = block2.key
+				else:
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					result += block1.andlen(block2)
+					pos1 += 1
+					pos2 += 1
+					if pos1 == length1 or pos2 == length2:
+						break
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					key1, key2 = block1.key, block2.key
+		return result
+
 	def rank(self, uint32_t x):
 		"""Return the number of elements ``<= x`` that are in this bitmap."""
 		cdef int size = 0

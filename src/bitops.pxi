@@ -11,6 +11,7 @@
 # 		uint64_t *src2, int slots)
 # cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
 # 		uint64_t *src2, int slots)
+# cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2)
 # cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots)
 # cdef inline int select64(uint64_t w, int i)
 # cdef inline int select32(uint32_t w, int i)
@@ -98,7 +99,7 @@ cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src):
 	"""dest gets the intersection of dest and src.
 
 	Returns number of set bits in result.
-	Both operands must have at least `slots' slots."""
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
 	cdef int n
 	cdef size_t result = 0
 	for n in range(BLOCKSIZE // BITSIZE):
@@ -111,7 +112,7 @@ cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src):
 	"""dest gets the union of dest and src.
 
 	Returns number of set bits in result.
-	Both operands must have at least ``slots`` slots."""
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
 	cdef int n
 	cdef size_t result = 0
 	for n in range(BLOCKSIZE // BITSIZE):
@@ -124,7 +125,7 @@ cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1):
 	"""dest gets dest - src2.
 
 	Returns number of set bits in result.
-	Both operands must have at least ``slots`` slots."""
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
 	cdef int n
 	cdef size_t result = 0
 	for n in range(BLOCKSIZE // BITSIZE):
@@ -137,12 +138,23 @@ cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1):
 	"""dest gets dest ^ src2.
 
 	Returns number of set bits in result.
-	Both operands must have at least ``slots`` slots."""
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
 	cdef int n
 	cdef size_t result = 0
 	for n in range(BLOCKSIZE // BITSIZE):
 		dest[n] ^= src1[n]
 		result += bit_popcount(dest[n])
+	return result
+
+
+cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2):
+	"""return the cardinality of the intersection of dest and src.
+
+	Returns number of set bits in result.
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		result += bit_popcount(src1[n] & src2[n])
 	return result
 
 

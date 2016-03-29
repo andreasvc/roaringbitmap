@@ -156,6 +156,18 @@ def bench_isub():
 	return sum(aa) / M, sum(bb) / M
 
 
+def bench_andlen():
+	a = timeit.Timer('len(ref & ref2)',
+			setup='from __main__ import DATA1, DATA2; '
+				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
+	b = timeit.Timer('rb.intersection_len(rb2)',
+			setup='from __main__ import DATA1, DATA2; '
+				'from roaringbitmap import RoaringBitmap; '
+				'rb = RoaringBitmap(DATA1); '
+				'rb2 = RoaringBitmap(DATA2)').timeit(number=M)
+	return a, b
+
+
 def main():
 	global N, MAX, DATA1, DATA2
 	for x in range(3):
@@ -187,7 +199,7 @@ def main():
 				bench_or,  # bench_ior,
 				bench_xor,  # bench_ixor,
 				bench_sub,  # bench_isub,
-				bench_eq, bench_neq):
+				bench_eq, bench_neq, bench_andlen):
 			a, b = func()
 			ratio = a / b
 			print(fmt % (func.__name__.split('_', 1)[1].ljust(8),

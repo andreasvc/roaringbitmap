@@ -47,40 +47,43 @@ For API documentation cf. http://roaringbitmap.readthedocs.org
 
 Benchmarks
 ----------
-Output of ``$ python benchmarks.py``::
+Output of ``$ make bench``::
 
     sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init      0.00217          0.00941    0.231
-    and       0.00116         0.000166     6.97
-    or        0.00189         0.000255     7.42
-    xor       0.00171         0.000231      7.4
-    sub       0.00104         0.000166     6.26
-    eq       0.000513         0.000487     1.05
-    neq      9.06e-06          3.7e-05    0.245
+    init      0.00124          0.00788    0.158
+    and       0.00125         0.000196     6.39
+    or        0.00202         0.000243     8.31
+    xor       0.00172         0.000254     6.77
+    sub      0.000934         0.000175     5.34
+    eq       0.000267          0.00049    0.545
+    neq      6.91e-06          4.1e-05    0.169
+    andlen    0.00132         0.000206     6.41
 
     dense set / high load factor
     100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
                 set()  RoaringBitmap()    ratio
-    init        0.294             1.16    0.252
-    and         0.217         0.000246      883
-    or          0.427         0.000262     1628
-    xor         0.391          0.00024     1629
-    sub          0.16         0.000234      682
-    eq         0.0569          0.00741     7.67
-    neq      8.82e-06         4.51e-05    0.196
+    init        0.425             1.97    0.216
+    and         0.363         0.000484      749
+    or          0.573         0.000471     1216
+    xor         0.521          0.00048     1084
+    sub         0.258          0.00047      548
+    eq         0.0703           0.0144     4.89
+    neq      1.41e-05         8.01e-05    0.176
+    andlen      0.367         0.000249     1472
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                 set()  RoaringBitmap()    ratio
-    init        0.481             1.96    0.246
-    and           0.6         0.000478     1255
-    or          0.964         0.000478     2015
-    xor         0.862         0.000487     1769
-    sub         0.341         0.000485      703
-    eq          0.116            0.017     6.83
-    neq      1.22e-05         4.98e-05    0.244
+    init        0.812                2    0.405
+    and         0.704         0.000533     1320
+    or           1.07         0.000528     2034
+    xor          1.08         0.000985     1092
+    sub         0.494         0.000986      501
+    eq           0.15           0.0319     4.69
+    neq       1.5e-05         9.49e-05    0.158
+    andlen      0.882         0.000489     1804
 
 References
 ----------

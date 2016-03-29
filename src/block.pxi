@@ -544,6 +544,67 @@ cdef class Block(object):
 				return False
 		return True
 
+	cdef int andlen(self, Block other):
+		"""Cardinality of intersection."""
+		cdef int length = 0, n
+		if self.state == DENSE:
+			if other.state == POSITIVE:
+				length = 0
+				for n in range(other.cardinality):
+					if TESTBIT(<uint64_t *>self.buf.data.as_ulongs,
+							other.buf.data.as_ushorts[n]):
+						length += 1
+			elif other.state == DENSE:
+				length = bitsetintersectcount(
+						<uint64_t *>self.buf.data.as_ulongs,
+						<uint64_t *>other.buf.data.as_ulongs)
+			elif other.state == INVERTED:
+				length = 0
+				for n in range(BLOCKSIZE - other.cardinality):
+					if TESTBIT(<uint64_t *>self.buf.data.as_ulongs,
+							other.buf.data.as_ushorts[n]):
+						length += 1
+		elif other.state == DENSE:
+			if self.state == INVERTED:
+				length = other.cardinality
+				for n in range(BLOCKSIZE - self.cardinality):
+					if TESTBIT(<uint64_t *>other.buf.data.as_ulongs,
+							self.buf.data.as_ushorts[n]):
+						length -= 1
+			else:  # self.state == POSITIVE:
+				length = 0
+				for n in range(self.cardinality):
+					if TESTBIT(<uint64_t *>other.buf.data.as_ulongs,
+							self.buf.data.as_ushorts[n]):
+						length += 1
+		elif self.state == POSITIVE and other.state == POSITIVE:
+			length = intersect2by2(
+					self.buf.data.as_ushorts,
+					other.buf.data.as_ushorts,
+					self.cardinality, other.cardinality,
+					NULL)
+		elif self.state == INVERTED and other.state == INVERTED:
+			length = union2by2(
+					self.buf.data.as_ushorts,
+					other.buf.data.as_ushorts,
+					BLOCKSIZE - self.cardinality,
+					BLOCKSIZE - other.cardinality,
+					NULL)
+		elif self.state == INVERTED and other.state == POSITIVE:
+			length = difference(
+					other.buf.data.as_ushorts,
+					self.buf.data.as_ushorts,
+					other.cardinality,
+					BLOCKSIZE - self.cardinality,
+					NULL)
+		elif self.state == POSITIVE and other.state == INVERTED:
+			length = difference(
+					self.buf.data.as_ushorts,
+					other.buf.data.as_ushorts,
+					self.cardinality, BLOCKSIZE - other.cardinality,
+					NULL)
+		return length
+
 	cdef int rank(self, uint16_t x):
 		"""Number of 1-bits in this bitmap ``<= x``."""
 		cdef int answer = 0

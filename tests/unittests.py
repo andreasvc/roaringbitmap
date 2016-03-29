@@ -224,6 +224,12 @@ class Test_roaringbitmap(object):
 		assert ref == set(rb)
 		assert rb == ref
 
+	def test_andlen(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert len(ref & ref2) == rb.intersection_len(rb2)
+
 	def test_rank(self, single):
 		for data in single:
 			ref = sorted(set(data))

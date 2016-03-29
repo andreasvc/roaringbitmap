@@ -3,6 +3,7 @@ import os
 import sys
 from distutils.core import setup
 from distutils.extension import Extension
+
 USE_CYTHON = '--with-cython' in sys.argv or not os.path.exists(
 		'src/roaringbitmap.c')
 if USE_CYTHON:
@@ -12,7 +13,7 @@ if USE_CYTHON:
 		from Cython.Build import cythonize
 		from Cython.Distutils import build_ext
 	except ImportError:
-		raise ValueError('could not import Cython.')
+		raise RuntimeError('could not import Cython.')
 	cmdclass = dict(build_ext=build_ext)
 else:
 	cmdclass = dict()
@@ -54,17 +55,18 @@ directives = {
 		}
 
 if __name__ == '__main__':
+	if sys.version_info[:2] < (2, 7) or (3, 0) <= sys.version_info[:2] < (3, 3):
+		raise RuntimeError('Python version 2.7 or >= 3.3 required.')
 	os.environ['GCC_COLORS'] = 'auto'
 	if USE_CYTHON:
-		extensions = [Extension(
-				'*',
-				sources=['src/*.pyx'],
-				extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
-				# extra_compile_args=['-O0', '-g'],
-				# extra_link_args=['-g'],
-				)]
 		ext_modules = cythonize(
-				extensions,
+				[Extension(
+					'*',
+					sources=['src/*.pyx'],
+					extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
+					# extra_compile_args=['-O0', '-g'],
+					# extra_link_args=['-g'],
+					)],
 				annotate=True,
 				compiler_directives=directives,
 				language_level=3,
