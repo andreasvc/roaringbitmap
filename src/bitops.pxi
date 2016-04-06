@@ -1,29 +1,30 @@
 # cdef inline functions defined here:
 # ===================================
-# cdef inline int iteratesetbits(uint64_t *vec, int slots,
+# cdef inline int iteratesetbits(uint64_t *vec,
 # 		uint64_t *cur, int *idx)
-# cdef inline int iterateunsetbits(uint64_t *vec, int slots,
+# cdef inline int iterateunsetbits(uint64_t *vec,
 # 		uint64_t *cur, int *idx)
 # cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx)
-# cdef inline void bitsetunioninplace(uint64_t *dest, uint64_t *src)
-# cdef inline void bitsetintersectinplace(uint64_t *dest, uint64_t *src)
-# cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1,
-# 		uint64_t *src2, int slots)
+# cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src)
+# cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src)
+# cdef inline int bitsetunion(uint64_t *dest, uint64_t *src1,
+# 		uint64_t *src2)
 # cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2)
-# cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
-# 		uint64_t *src2, int slots)
+# cdef inline int bitsetintersect(uint64_t *dest, uint64_t *src1,
+# 		uint64_t *src2)
 # cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2)
-# cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots)
+# cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2)
 # cdef inline int select64(uint64_t w, int i)
 # cdef inline int select32(uint32_t w, int i)
 # cdef inline int select16(uint16_t w, int i)
+"""
+All bitvector operands are assumed to have ``BITSIZE`` elements.
+"""
 
-
-cdef inline int iteratesetbits(uint64_t *vec, int slots,
-		uint64_t *cur, int *idx):
+cdef inline int iteratesetbits(uint64_t *vec,
+		uint64_t *cur, int *idx) nogil:
 	"""Iterate over set bits in an array of unsigned long.
 
-	:param slots: number of elements in unsigned long array ``vec``.
 	:param cur and idx: pointers to variables to maintain state,
 		``idx`` should be initialized to 0,
 		and ``cur`` to the first element of
@@ -42,7 +43,7 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 	cdef int tmp
 	while not cur[0]:
 		idx[0] += 1
-		if idx[0] >= slots:
+		if idx[0] >= BLOCKSIZE // BITSIZE:
 			return -1
 		cur[0] = vec[idx[0]]
 	tmp = bit_ctz(cur[0])  # index of right-most 1-bit in current slot
@@ -50,15 +51,15 @@ cdef inline int iteratesetbits(uint64_t *vec, int slots,
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline int iterateunsetbits(uint64_t *vec, int slots,
-		uint64_t *cur, int *idx):
+cdef inline int iterateunsetbits(uint64_t *vec,
+		uint64_t *cur, int *idx) nogil:
 	"""Like ``iteratesetbits``, but return indices of zero bits.
 
 	:param cur: should be initialized as: ``cur = ~vec[idx]``."""
 	cdef int tmp
 	while not cur[0]:
 		idx[0] += 1
-		if idx[0] >= slots:
+		if idx[0] >= BLOCKSIZE // BITSIZE:
 			return -1
 		cur[0] = ~vec[idx[0]]
 	tmp = bit_ctz(cur[0])  # index of right-most 0-bit in current slot
@@ -66,7 +67,8 @@ cdef inline int iterateunsetbits(uint64_t *vec, int slots,
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx):
+cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur,
+		int *idx) nogil:
 	"""Iterate in reverse over set bits in an array of unsigned long.
 
 	:param cur and idx: pointers to variables to maintain state,
@@ -96,7 +98,7 @@ cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur, int *idx):
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src):
+cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src) nogil:
 	"""dest gets the intersection of dest and src.
 
 	Returns number of set bits in result.
@@ -109,7 +111,7 @@ cdef inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src):
 	return result
 
 
-cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src):
+cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src) nogil:
 	"""dest gets the union of dest and src.
 
 	Returns number of set bits in result.
@@ -122,7 +124,7 @@ cdef inline int bitsetunioninplace(uint64_t *dest, uint64_t *src):
 	return result
 
 
-cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1):
+cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1) nogil:
 	"""dest gets dest - src2.
 
 	Returns number of set bits in result.
@@ -135,7 +137,7 @@ cdef inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src1):
 	return result
 
 
-cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1):
+cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1) nogil:
 	"""dest gets dest ^ src2.
 
 	Returns number of set bits in result.
@@ -148,28 +150,7 @@ cdef inline int bitsetxorinplace(uint64_t *dest, uint64_t *src1):
 	return result
 
 
-cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2):
-	"""return the cardinality of the intersection of dest and src.
-
-	Returns number of set bits in result.
-	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
-	cdef int n, result = 0
-	for n in range(BLOCKSIZE // BITSIZE):
-		result += bit_popcount(src1[n] & src2[n])
-	return result
-
-
-cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
-		uint64_t *src2, int slots):
-	"""dest gets the intersection of src1 and src2.
-
-	operands must have at least ``slots`` slots."""
-	cdef int a
-	for a in range(slots):
-		dest[a] = src1[a] & src2[a]
-
-
-cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2):
+cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2) nogil:
 	"""return the cardinality of the union of dest and src.
 
 	Returns number of set bits in result.
@@ -180,49 +161,82 @@ cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2):
 	return result
 
 
-cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1, uint64_t *src2,
-		int slots):
-	"""dest gets the union of src1 and src2.
+cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2) nogil:
+	"""return the cardinality of the intersection of dest and src.
 
-	operands must have at least ``slots`` slots."""
-	cdef int a
-	for a in range(slots):
-		dest[a] = src1[a] | src2[a]
-
-
-cdef inline void bitsetsubtract(uint64_t *dest, uint64_t *src1, uint64_t *src2,
-		int slots):
-	"""dest gets src1 - src2.
-
-	operands must have at least ``slots`` slots."""
-	cdef int a
-	for a in range(slots):
-		dest[a] = src1[a] & ~src2[a]
+	Returns number of set bits in result.
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		result += bit_popcount(src1[n] & src2[n])
+	return result
 
 
-cdef inline void bitsetxor(uint64_t *dest, uint64_t *src1, uint64_t *src2,
-		int slots):
-	"""dest gets src1 ^ src2.
+cdef inline int bitsetintersectunioncount(uint64_t *src1, uint64_t *src2,
+		int *intersection_count, int *union_count) nogil:
+	"""Compute the cardinalities of the intersection and union of dest and src.
 
-	operands must have at least ``slots`` slots."""
-	cdef int a
-	for a in range(slots):
-		dest[a] = src1[a] ^ src2[a]
+	Returns number of set bits in result.
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		intersection_count[0] += bit_popcount(src1[n] & src2[n])
+		union_count[0] += bit_popcount(src1[n] | src2[n])
+	return result
+
+cdef inline int bitsetintersect(uint64_t *dest, uint64_t *src1,
+		uint64_t *src2) nogil:
+	"""dest gets the intersection of src1 and src2."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] = src1[n] & src2[n]
+		result += bit_popcount(dest[n])
+	return result
 
 
-cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2, int slots):
+cdef inline int bitsetunion(uint64_t *dest, uint64_t *src1,
+		uint64_t *src2) nogil:
+	"""dest gets the union of src1 and src2."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] = src1[n] | src2[n]
+		result += bit_popcount(dest[n])
+	return result
+
+
+cdef inline int bitsetsubtract(uint64_t *dest, uint64_t *src1,
+		uint64_t *src2) nogil:
+	"""dest gets src1 - src2."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] = src1[n] & ~src2[n]
+		result += bit_popcount(dest[n])
+	return result
+
+
+cdef inline int bitsetxor(uint64_t *dest, uint64_t *src1,
+		uint64_t *src2) nogil:
+	"""dest gets src1 ^ src2."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		dest[n] = src1[n] ^ src2[n]
+		result += bit_popcount(dest[n])
+	return result
+
+
+cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2) nogil:
 	"""Test whether vec1 is a subset of vec2.
 
 	i.e., all set bits of vec1 should be set in vec2."""
 	cdef int a
-	for a in range(slots):
+	for a in range(BLOCKSIZE // BITSIZE):
 		if (vec1[a] & vec2[a]) != vec1[a]:
 			return False
 	return True
 
 cdef inline int select64(uint64_t w, int i):
 	"""Given a 64-bit int w, return the position of the ith 1-bit."""
-	cdef uint64_t part1 = w & 0xFFFFFFFF
+	cdef uint64_t part1 = w & 0xFFFFFFFFUL
 	cdef int wfirsthalf = bit_popcount(part1)
 	if wfirsthalf > i:
 		return select32(part1, i)
@@ -232,7 +246,7 @@ cdef inline int select64(uint64_t w, int i):
 
 cdef inline int select32(uint32_t w, int i):
 	"""Given a 32-bit int w, return the position of the ith 1-bit."""
-	cdef uint64_t part1 = w & 0xFFFF
+	cdef uint64_t part1 = w & 0xFFFFUL
 	cdef int wfirsthalf = bit_popcount(part1)
 	if wfirsthalf > i:
 		return select16(part1, i)

@@ -1,10 +1,14 @@
 # Set / search operations on arrays
 
-cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem):
-	"""Binary search for short `elem` in array `data`."""
+cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem) nogil:
+	"""Binary search for short `elem` in array `data`.
+
+	:returns: positive index ``i`` if ``elem`` is found; negative value ``i``
+		if ``elem`` is not found, but would fit at ``-i - 1``."""
 	cdef int low = begin
 	cdef int high = end - 1
-	cdef int middleidx, middleval
+	cdef int middleidx
+	cdef uint16_t middleval
 	# accelerate the possibly common case of a just appended value
 	if end > 0 and data[end - 1] < elem:
 		return -end - 1
@@ -20,7 +24,7 @@ cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem):
 	return -(low + 1)
 
 
-cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem):
+cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem) nogil:
 	cdef int lower = pos + 1
 	cdef int spansize = 1
 	cdef int upper, mid
@@ -46,7 +50,7 @@ cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem):
 
 
 cdef int intersect2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
+		int length1, int length2, uint16_t *dest) nogil:
 	if length1 * 64 < length2:
 		return intersectgalloping(data1, length1, data2, length2, dest)
 	elif length2 * 64 < length1:
@@ -55,7 +59,7 @@ cdef int intersect2by2(uint16_t *data1, uint16_t *data2,
 
 
 cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
+		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length1 == 0 or length2 == 0:
 		return 0
@@ -89,7 +93,7 @@ cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 cdef int intersectgalloping(
 		uint16_t *small, int lensmall,
 		uint16_t *large, int lenlarge,
-		uint16_t *dest):
+		uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if lensmall == 0:
 		return 0
@@ -115,14 +119,18 @@ cdef int intersectgalloping(
 
 
 cdef int union2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
-	cdef int k1 = 0, k2 = 0, pos = 0
+		int length1, int length2, uint16_t *dest, int *intersect_count) nogil:
+	cdef int k1 = 0, k2 = 0, pos = 0, n_elems
 	if length2 == 0:
-		memcpy(<void *>dest, <void *>data1, length1 * sizeof(uint16_t))
+		if dest is not NULL:
+			memcpy(dest, data1, length1 * sizeof(uint16_t))
 		return length1
 	elif length1 == 0:
-		memcpy(<void *>dest, <void *>data2, length2 * sizeof(uint16_t))
+		if dest is not NULL:
+			memcpy(dest, data2, length2 * sizeof(uint16_t))
 		return length2
+	elif length1 > length2:
+		return union2by2(data2, data1, length2, length1, dest, intersect_count)
 	while True:
 		if data1[k1] < data2[k2]:
 			if dest is not NULL:
@@ -130,51 +138,42 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 			pos += 1
 			k1 += 1
 			if k1 >= length1:
-				while k2 < length2:
-					if dest is not NULL:
-						dest[pos] = data2[k2]
-					pos += 1
-					k2 += 1
-				return pos
-		elif data1[k1] == data2[k2]:
-			if dest is not NULL:
-				dest[pos] = data1[k1]
-			pos += 1
-			k1 += 1
-			k2 += 1
-			if k1 >= length1:
-				while k2 < length2:
-					if dest is not NULL:
-						dest[pos] = data2[k2]
-					pos += 1
-					k2 += 1
-				return pos
-			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
-		else:  # data1[k1] > data2[k2]
+				break
+		elif data1[k1] > data2[k2]:
 			if dest is not NULL:
 				dest[pos] = data2[k2]
 			pos += 1
 			k2 += 1
 			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
+				break
+		else:  # data1[k1] == data2[k2]
+			if dest is not NULL:
+				dest[pos] = data1[k1]
+			pos += 1
+			intersect_count[0] += 1
+			k1 += 1
+			k2 += 1
+			if k1 >= length1 or k2 >= length2:
+				break
+	if k1 < length1:
+		n_elems = length1 - k1
+		if dest is not NULL:
+			memcpy(&(dest[pos]), &(data1[k1]), n_elems * sizeof(uint16_t))
+		pos += n_elems
+	elif k2 < length2:
+		n_elems = length2 - k2
+		if dest is not NULL:
+			memcpy(&(dest[pos]), &(data2[k2]), n_elems * sizeof(uint16_t))
+		pos += n_elems
+	return pos
 
 
 cdef int difference(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
+		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length2 == 0:
-		memcpy(<void *>dest, <void *>data1, length1 * sizeof(uint16_t))
+		if dest is not NULL:
+			memcpy(<void *>dest, <void *>data1, length1 * sizeof(uint16_t))
 		return length1
 	elif length1 == 0:
 		return 0
@@ -191,26 +190,22 @@ cdef int difference(uint16_t *data1, uint16_t *data2,
 			k2 += 1
 			if k1 >= length1:
 				return pos
-			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
+			elif k2 >= length2:
+				break
 		else:  # data1[k1] > data2[k2]
 			k2 += 1
 			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
+				break
+	while k1 < length1:
+		if dest is not NULL:
+			dest[pos] = data1[k1]
+		pos += 1
+		k1 += 1
+	return pos
 
 
 cdef int xor2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest):
+		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length2 == 0:
 		if dest is not NULL:
@@ -227,38 +222,70 @@ cdef int xor2by2(uint16_t *data1, uint16_t *data2,
 			pos += 1
 			k1 += 1
 			if k1 >= length1:
-				while k2 < length2:
-					if dest is not NULL:
-						dest[pos] = data2[k2]
-					pos += 1
-					k2 += 1
-				return pos
+				break
 		elif data1[k1] == data2[k2]:
 			k1 += 1
 			k2 += 1
-			if k1 >= length1:
-				while k2 < length2:
-					if dest is not NULL:
-						dest[pos] = data2[k2]
-					pos += 1
-					k2 += 1
-				return pos
-			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
+			if k1 >= length1 or k2 >= length2:
+				break
 		else:  # data1[k1] > data2[k2]
 			if dest is not NULL:
 				dest[pos] = data2[k2]
 			pos += 1
 			k2 += 1
 			if k2 >= length2:
-				while k1 < length1:
-					if dest is not NULL:
-						dest[pos] = data1[k1]
-					pos += 1
-					k1 += 1
-				return pos
+				break
+	if k1 >= length1:
+		while k2 < length2:
+			if dest is not NULL:
+				dest[pos] = data2[k2]
+			pos += 1
+			k2 += 1
+	elif k2 >= length2:
+		while k1 < length1:
+			if dest is not NULL:
+				dest[pos] = data1[k1]
+			pos += 1
+			k1 += 1
+	return pos
+
+
+cdef void symmetricdifflen(uint16_t *data1, uint16_t *data2,
+		int length1, int length2, int *diff1, int *diff2) nogil:
+	"""Computes length of differences. diff1 will equal |data1 - data2|,
+	diff2 will equal |data2 - data1|."""
+	cdef int k1 = 0, k2 = 0
+	if length2 == 0:
+		diff1[0] = length1
+		return
+	elif length1 == 0:
+		diff2[0] = length2
+		return
+	while True:
+		if data1[k1] < data2[k2]:
+			diff1[0] += 1
+			k1 += 1
+			if k1 >= length1:
+				break
+		elif data1[k1] == data2[k2]:
+			k1 += 1
+			k2 += 1
+			if k1 >= length1:
+				break
+			if k2 >= length2:
+				break
+		else:  # data1[k1] > data2[k2]
+			diff2[0] += 1
+			k2 += 1
+			if k2 >= length2:
+				break
+		if k1 >= length1:
+			while k2 < length2:
+				diff2[0] += 1
+				k2 += 1
+			return
+		if k2 >= length2:
+			while k1 < length1:
+				diff1[0] += 1
+				k1 += 1
+			return

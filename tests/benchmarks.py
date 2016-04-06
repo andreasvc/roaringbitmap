@@ -180,7 +180,7 @@ def bench_orlen():
 	return a, b
 
 
-def bench_jaccard_dist():
+def bench_jaccard():
 	a = timeit.Timer('1 - (len(ref & ref2) / len(ref | ref2))',
 			setup='from __main__ import DATA1, DATA2; '
 				'ref = set(DATA1); ref2 = set(DATA2)').timeit(number=M)
@@ -196,21 +196,21 @@ def main():
 	global N, MAX, DATA1, DATA2
 	for x in range(3):
 		if x == 0:
-			print('sparse set')
+			print('small sparse set')
 			N = 200
 			MAX = 40000
 		elif x == 1:
-			print('dense set / high load factor')
-			N = 40000 - 200
-			MAX = 40000
-		elif x == 2:
 			print('medium load factor')
 			N = 59392
 			MAX = 118784
-		elif x == 3:
-			print('large range')
+		elif x == 2:
+			print('large sparse set')
 			N = 1 << 17  # number of random elements
 			MAX = 1 << 31
+		elif x == 3:
+			print('dense set / high load factor')
+			N = 40000 - 200
+			MAX = 40000
 		DATA1, DATA2 = pair()
 
 		fmt = '%12s %8s %16s %8s'
@@ -223,8 +223,8 @@ def main():
 				bench_or,  # bench_ior,
 				bench_xor,  # bench_ixor,
 				bench_sub,  # bench_isub,
-				bench_eq, bench_neq, bench_andlen, bench_orlen,
-				bench_jaccard_dist):
+				bench_eq, bench_neq,
+				bench_andlen, bench_orlen, bench_jaccard):
 			a, b = func()
 			ratio = a / b
 			print(fmt % (func.__name__.split('_', 1)[1].ljust(12),

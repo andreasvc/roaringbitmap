@@ -18,10 +18,17 @@ if USE_CYTHON:
 else:
 	cmdclass = dict()
 
-metadata = dict(name='roaringbitmap',
-		version='0.3',
+DEBUG = '--debug' in sys.argv
+if DEBUG:
+	sys.argv.remove('--debug')
+
+with open('README.rst') as inp:
+	README = inp.read()
+
+METADATA = dict(name='roaringbitmap',
+		version='0.4pre',
 		description='Roaring Bitmap',
-		long_description=open('README.rst').read(),
+		long_description=README,
 		author='Andreas van Cranenburgh',
 		author_email='A.W.vanCranenburgh@uva.nl',
 		url='https://github.com/andreasvc/roaringbitmap/',
@@ -58,14 +65,21 @@ if __name__ == '__main__':
 	if sys.version_info[:2] < (2, 7) or (3, 0) <= sys.version_info[:2] < (3, 3):
 		raise RuntimeError('Python version 2.7 or >= 3.3 required.')
 	os.environ['GCC_COLORS'] = 'auto'
+	extra_compile_args = ['-O3', '-march=native', '-DNDEBUG',
+			'-Wno-strict-prototypes']
+	extra_link_args = ['-DNDEBUG']
 	if USE_CYTHON:
+		if DEBUG:
+			directives.update(wraparound=True, boundscheck=True)
+			extra_compile_args = ['-g', '-O0',
+					'-Wno-strict-prototypes', '-Wno-unused-function']
+			extra_link_args = ['-g']
 		ext_modules = cythonize(
 				[Extension(
 					'*',
 					sources=['src/*.pyx'],
-					extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
-					# extra_compile_args=['-O0', '-g'],
-					# extra_link_args=['-g'],
+					extra_compile_args=extra_compile_args,
+					extra_link_args=extra_link_args,
 					)],
 				annotate=True,
 				compiler_directives=directives,
@@ -75,9 +89,10 @@ if __name__ == '__main__':
 		ext_modules = [Extension(
 				'roaringbitmap',
 				sources=['src/roaringbitmap.c'],
-				extra_compile_args=['-O3', '-DNDEBUG', '-march=native'],
+				extra_compile_args=extra_compile_args,
+				extra_link_args=extra_link_args,
 				)]
 	setup(
 			cmdclass=cmdclass,
 			ext_modules=ext_modules,
-			**metadata)
+			**METADATA)
