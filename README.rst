@@ -49,47 +49,48 @@ Benchmarks
 ----------
 Output of ``$ make bench``::
 
-    sparse set
+    small sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                     set()  RoaringBitmap()    ratio
-    init          0.00054          0.00668   0.0808
-    and          0.000404         8.51e-05     4.75
-    or           0.000537         9.48e-05     5.67
-    xor          0.000452         8.36e-05     5.41
-    sub          0.000401         6.97e-05     5.75
-    eq           0.000159         0.000831    0.191
-    neq          2.61e-06         2.05e-05    0.127
-    andlen       0.000416         5.47e-05     7.61
-    orlen        0.000532         4.43e-05       12
-    jaccard_dist  0.00113         0.000105     10.8
-
-    dense set / high load factor
-    100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
-                    set()  RoaringBitmap()    ratio
-    init             0.18             1.37    0.132
-    and            0.0962         0.000152      633
-    or               0.17         0.000137     1248
-    xor             0.123         0.000134      912
-    sub             0.074         0.000138      537
-    eq             0.0335           0.0133     2.53
-    neq          4.24e-06         2.44e-05    0.174
-    andlen         0.0962         7.74e-05     1244
-    orlen           0.185         8.97e-05     2057
-    jaccard_dist    0.299         0.000168     1786
+    init          0.00173          0.00317    0.546
+    and           0.00213         0.000357     5.98
+    or            0.00352         0.000505     6.97
+    xor            0.0031         0.000535      5.8
+    sub           0.00193         0.000396     4.87
+    eq           0.000872         2.51e-05     34.8
+    neq          9.87e-06         1.37e-05    0.723
+    andlen        0.00216         0.000347     6.22
+    orlen         0.00349         0.000318       11
+    jaccard       0.00578         0.000314     18.4
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                     set()  RoaringBitmap()    ratio
-    init            0.245             2.04     0.12
-    and             0.263         0.000287      914
-    or              0.418         0.000284     1473
-    xor             0.314         0.000283     1107
-    sub             0.157         0.000292      536
-    eq             0.0674           0.0295     2.28
-    neq          5.04e-06         2.57e-05    0.196
-    andlen          0.262         0.000175     1501
-    orlen           0.468         0.000158     2970
-    jaccard_dist    0.759         0.000315     2411
+    init            0.818            0.728     1.12
+    and             0.851         0.000657     1294
+    or                1.2         0.000529     2274
+    xor              1.11          0.00101     1098
+    sub             0.515         0.000984      523
+    eq              0.192         0.000121     1583
+    neq          8.55e-06         1.23e-05    0.694
+    andlen          0.612         0.000238     2570
+    orlen               1          0.00023     4365
+    jaccard          1.65         0.000306     5405
+
+    large sparse set
+    100 runs with sets of 131072 random elements n s.t. 0 <= n < 2147483648
+                    set()  RoaringBitmap()    ratio
+    init             1.93             54.3   0.0356
+    and              1.41            0.562     2.51
+    or               3.01             1.62     1.86
+    xor              3.62             4.71     0.77
+    sub              1.79             7.87    0.228
+    eq              0.305           0.0872      3.5
+    neq          8.94e-06          0.00821  0.00109
+    andlen           1.35            0.212     6.37
+    orlen            2.85            0.229     12.5
+    jaccard           4.6             0.43     10.7
+
 References
 ----------
 Samy Chambi, Daniel Lemire, Owen Kaser, Robert Godin (2014),
