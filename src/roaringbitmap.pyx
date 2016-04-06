@@ -633,6 +633,130 @@ cdef class RoaringBitmap(object):
 					key1, key2 = block1.key, block2.key
 		return result
 
+	def union_len(self, other):
+		"""Return the cardinality of the union.
+
+		Optimized version of ``len(self & other)``."""
+		cdef RoaringBitmap ob1, ob2
+		cdef Block block1, block2, block
+		cdef int length1, length2, result = 0
+		cdef int pos1 = 0, pos2 = 0
+		cdef uint16_t key1, key2
+		if not isinstance(self, RoaringBitmap):
+			ob1, ob2 = RoaringBitmap(self), other
+		elif not isinstance(other, RoaringBitmap):
+			ob1, ob2 = self, RoaringBitmap(other)
+		else:
+			ob1, ob2 = self, other
+		length1, length2 = len(ob1.data), len(ob2.data)
+		if pos1 < length1 and pos2 < length2:
+			block1, block2 = ob1.data[pos1], ob2.data[pos2]
+			key1, key2 = block1.key, block2.key
+			while True:
+				if key1 < key2:
+					# add cardinality of non-overlapping block
+					block = ob1.data[pos1]
+					result += block.cardinality
+					pos1 += 1
+					if pos1 == length1:
+						break
+					block1 = ob1.data[pos1]
+					key1 = block1.key
+				elif key1 > key2:
+					# add cardinality of non-overlapping block
+					block = ob2.data[pos2]
+					result += block.cardinality
+					pos2 += 1
+					if pos2 == length2:
+						break
+					block2 = ob2.data[pos2]
+					key2 = block2.key
+				else:
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					result += block1.orlen(block2)
+					pos1 += 1
+					pos2 += 1
+					if pos1 == length1 or pos2 == length2:
+						# add remaining cardinalities
+						if pos1 != length1:
+							for block in ob1.data[pos1:]:
+								result += block.cardinality
+						elif pos2 != length2:
+							# add remaining cardinalities
+							for block in ob2.data[pos2:]:
+								result += block.cardinality
+						break
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					key1, key2 = block1.key, block2.key
+		return result
+
+	def jaccard_dist(self, other):
+		"""Return the jaccard distance.
+
+		Counts of union and intersection are performed simulteously
+
+		Optimized version of ``1 - len(self & other) / len(self | other)``."""
+		cdef RoaringBitmap ob1, ob2
+		cdef Block block1, block2, block
+		cdef int length1, length2,
+		cdef union_result = 0, intersection_result = 0
+		cdef int pos1 = 0, pos2 = 0
+		cdef float jaccard_distance
+		cdef uint16_t key1, key2
+		if not isinstance(self, RoaringBitmap):
+			ob1, ob2 = RoaringBitmap(self), other
+		elif not isinstance(other, RoaringBitmap):
+			ob1, ob2 = self, RoaringBitmap(other)
+		else:
+			ob1, ob2 = self, other
+		length1, length2 = len(ob1.data), len(ob2.data)
+		if pos1 < length1 and pos2 < length2:
+			block1, block2 = ob1.data[pos1], ob2.data[pos2]
+			key1, key2 = block1.key, block2.key
+			while True:
+				if key1 < key2:
+					# add cardinality of non-overlapping block
+					block = ob1.data[pos1]
+					union_result += block.cardinality
+					pos1 += 1
+					if pos1 == length1:
+						break
+					block1 = ob1.data[pos1]
+					key1 = block1.key
+				elif key1 > key2:
+					# add cardinality of non-overlapping block
+					block = ob2.data[pos2]
+					union_result += block.cardinality
+					pos2 += 1
+					if pos2 == length2:
+						break
+					block2 = ob2.data[pos2]
+					key2 = block2.key
+				else:
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					union_result += block1.orlen(block2)
+					intersection_result += block1.andlen(block2)
+					pos1 += 1
+					pos2 += 1
+					if pos1 == length1 or pos2 == length2:
+						# add remaining cardinalities
+						if pos1 != length1:
+							for block in ob1.data[pos1:]:
+								union_result += block.cardinality
+						elif pos2 != length2:
+							# add remaining cardinalities
+							for block in ob2.data[pos2:]:
+								union_result += block.cardinality
+						break
+					block1, block2 = ob1.data[pos1], ob2.data[pos2]
+					key1, key2 = block1.key, block2.key
+
+		jaccard_distance = 1 - (intersection_result / union_result)
+
+		return jaccard_distance
+
+
+
 	def rank(self, uint32_t x):
 		"""Return the number of elements ``<= x`` that are in this bitmap."""
 		cdef int size = 0
