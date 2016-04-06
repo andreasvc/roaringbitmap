@@ -137,7 +137,8 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 					k2 += 1
 				return pos
 		elif data1[k1] == data2[k2]:
-			dest[pos] = data1[k1]
+			if dest is not NULL:
+				dest[pos] = data1[k1]
 			pos += 1
 			k1 += 1
 			k2 += 1
@@ -156,7 +157,8 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 					k1 += 1
 				return pos
 		else:  # data1[k1] > data2[k2]
-			dest[pos] = data2[k2]
+			if dest is not NULL:
+				dest[pos] = data2[k2]
 			pos += 1
 			k2 += 1
 			if k2 >= length2:

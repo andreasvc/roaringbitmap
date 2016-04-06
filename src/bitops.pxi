@@ -9,6 +9,7 @@
 # cdef inline void bitsetintersectinplace(uint64_t *dest, uint64_t *src)
 # cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1,
 # 		uint64_t *src2, int slots)
+# cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2)
 # cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
 # 		uint64_t *src2, int slots)
 # cdef inline int bitsetintersectcount(uint64_t *src1, uint64_t *src2)
@@ -166,6 +167,17 @@ cdef inline void bitsetintersect(uint64_t *dest, uint64_t *src1,
 	cdef int a
 	for a in range(slots):
 		dest[a] = src1[a] & src2[a]
+
+
+cdef inline int bitsetunioncount(uint64_t *src1, uint64_t *src2):
+	"""return the cardinality of the union of dest and src.
+
+	Returns number of set bits in result.
+	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
+	cdef int n, result = 0
+	for n in range(BLOCKSIZE // BITSIZE):
+		result += bit_popcount(src1[n] | src2[n])
+	return result
 
 
 cdef inline void bitsetunion(uint64_t *dest, uint64_t *src1, uint64_t *src2,

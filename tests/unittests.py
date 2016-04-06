@@ -1,6 +1,6 @@
 """Unit tests for roaringbitmap"""
 from __future__ import division, print_function, absolute_import, \
-        unicode_literals
+	 unicode_literals
 import random
 import pytest
 import pickle
@@ -229,6 +229,18 @@ class Test_roaringbitmap(object):
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert len(ref & ref2) == rb.intersection_len(rb2)
+
+	def test_orlen(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert len((ref | ref2)) == rb.union_len(rb2)
+
+	def test_jaccard_dist(self, pair):
+		for data1, data2 in pair:
+			ref, ref2 = set(data1), set(data2)
+			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			assert 1 - (len(ref & ref2)/len(ref | ref2)) == rb.jaccard_dist(rb2)
 
 	def test_rank(self, single):
 		for data in single:
