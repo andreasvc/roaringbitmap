@@ -23,7 +23,7 @@ PARAMS = [
 	(200, 65535),
 	(65535 - 200, 65535),
 	(40000, 65535),
-	(40000, 1 << 31)]
+	(4000, 1 << 31)]
 
 
 @pytest.fixture(scope='module')
@@ -40,10 +40,12 @@ def pair():
 	random.seed(42)
 	result = []
 	for a in single():
-		for elements, maxnum in PARAMS:
-			b = a[:len(a) // 2]
-			b.extend(random.randint(0, maxnum) for _ in range(elements // 2))
-			result.append((a, b))
+		for b in single():
+			for elements, maxnum in PARAMS:
+				b = b[:len(b) // 2]
+				b.extend(random.randint(0, maxnum)
+						for _ in range(elements // 2))
+				result.append((a, b))
 	return result
 
 
@@ -225,25 +227,25 @@ class Test_roaringbitmap(object):
 		for data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert not ref <= ref2
-			assert not set(rb) <= ref2
-			assert not rb <= rb2
+			refans = ref <= ref2
+			assert (set(rb) <= ref2) == refans
+			assert (rb <= rb2) == refans
 			k = len(data2) // 2
 			ref, rb = set(data2[:k]), RoaringBitmap(data2[:k])
-			assert ref <= ref2
-			assert set(rb) <= ref2
-			assert rb <= rb2
+			refans = ref <= ref2
+			assert (set(rb) <= ref2) == refans
+			assert (rb <= rb2) == refans
 
 	def test_disjoint(self, pair):
 		for data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert not ref.isdisjoint(ref2)
-			assert not rb.isdisjoint(rb2)
+			refans = ref.isdisjoint(ref2)
+			assert rb.isdisjoint(rb2) == refans
 			data3 = [a for a in data2 if a not in ref]
 			ref3, rb3 = set(data3), RoaringBitmap(data3)
-			assert ref.isdisjoint(ref3)
-			assert rb.isdisjoint(rb3)
+			refans2 = ref.isdisjoint(ref3)
+			assert rb.isdisjoint(rb3) == refans2
 
 	def test_aggregateand(self):
 		data = [[random.randint(0, 1000) for _ in range(2000)]

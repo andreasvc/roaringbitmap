@@ -20,6 +20,10 @@ cdef extern from "bitcount.h":
 	unsigned int bit_clz(uint64_t) nogil
 	unsigned int bit_ctz(uint64_t) nogil
 	unsigned int bit_popcount(uint64_t) nogil
+	inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src)
+	inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src)
+	inline int bitsetunioninplace(uint64_t *dest, uint64_t *src)
+	inline int bitsetxorinplace(uint64_t *dest, uint64_t *src)
 
 
 cdef union Buffer:
@@ -34,15 +38,15 @@ cdef struct Block:
 	# Whether this block contains a bitvector (DENSE); otherwise sparse array;
 	# The array can contain elements corresponding to 0-bits (INVERTED)
 	# or 1-bits (POSITIVE).
-	uint8_t state  # either DENSE, INVERTED, or POSITIVE
-	uint16_t key  # the high bits of elements in this block
-	uint32_t cardinality  # the number of elements
-	uint32_t capacity  # allocated elements
 	Buffer buf  # data: sparse array or fixed-size bitvector
+	uint32_t cardinality  # the number of elements
+	uint16_t capacity  # number of allocated uint16_t elements
+	uint8_t state  # either DENSE, INVERTED, or POSITIVE
 
 
 cdef class RoaringBitmap(object):
 	cdef Block *data
+	cdef uint16_t *keys  # the high bits of elements in each block
 	cdef uint32_t size  # the number of blocks
 	cdef uint32_t capacity  # the allocated capacity for blocks
 
@@ -51,4 +55,5 @@ cdef class RoaringBitmap(object):
 	cdef _extendarray(self, int k)
 	cdef _resize(self, int k)
 	cdef _removeatidx(self, int i)
-	cdef _insert(self, int i, Block *elem)
+	cdef _insertcopy(self, int i, uint16_t key, Block *elem)
+	cdef Block *_insertempty(self, int i, uint16_t key, bint moveblocks)

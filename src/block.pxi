@@ -49,7 +49,6 @@ cdef inline block_discard(Block *self, uint16_t elem):
 
 cdef inline uint32_t block_pop(Block *self) except 1 << 16:
 	"""Remove and return the largest element."""
-	cdef uint32_t high = self.key << 16
 	cdef uint32_t n
 	cdef uint64_t cur
 	cdef int idx, low
@@ -60,36 +59,32 @@ cdef inline uint32_t block_pop(Block *self) except 1 << 16:
 		cur = self.buf.dense[idx]
 		n = reviteratesetbits(self.buf.dense, &cur, &idx)
 		if n != -1:
-			low = n
-			elem = high | low
-			block_discard(self, elem)
-			return low
+			block_discard(self, n)
+			return n
 	elif self.state == POSITIVE:
 		self.cardinality -= 1
 		return self.buf.sparse[self.cardinality]
 	elif self.state == INVERTED:
 		for low in reversed(range(self.buf.sparse[
 					BLOCKSIZE - self.cardinality - 1] + 1, BLOCKSIZE)):
-			elem = high | low
-			block_discard(self, elem)
+			block_discard(self, low)
 			return low
 		if self.cardinality < BLOCKSIZE - 1:
 			for n in reversed(range(BLOCKSIZE - self.cardinality - 1)):
 				for low in reversed(range(
 						self.buf.sparse[n] + 1,
 						self.buf.sparse[n + 1])):
-					elem = high | low
-					block_discard(self, elem)
+					block_discard(self, low)
 					return low
 		for low in reversed(range(self.buf.sparse[0])):
-			elem = high | low
-			block_discard(self, elem)
+			block_discard(self, low)
 			return low
 
 
 cdef inline block_initrange(Block *self, uint16_t start, uint32_t stop):
 	"""Allocate block and set a range of elements."""
-	cdef uint32_t n
+	cdef uint32_t n, a, b
+	cdef uint64_t ones = ~(<uint64_t>0)
 	self.cardinality = stop - start
 	if self.cardinality < MAXARRAYLENGTH:
 		self.buf.sparse = allocsparse(self.cardinality)
@@ -109,16 +104,15 @@ cdef inline block_initrange(Block *self, uint16_t start, uint32_t stop):
 		self.buf.dense = allocdense()
 		self.capacity = BITMAPSIZE // sizeof(uint16_t)
 		self.state = DENSE
-		memset(self.buf.ptr, 0, (start // 64 + 1) * sizeof(uint64_t))
-		for n in range(start, (start - (start % 64)) + 64):
-			SETBIT(self.buf.dense, n)
-		memset(&(self.buf.dense[BITSLOT(start) + 1]), 255,
-				((BITSLOT(stop) - 1) - (BITSLOT(start) + 1) + 1)
-				* sizeof(uint64_t))
-		memset(&(self.buf.dense[BITSLOT(stop)]), 0,
-				BITMAPSIZE - BITSLOT(stop) * sizeof(uint64_t))
-		for n in range(stop - stop % 64, stop):
-			SETBIT(self.buf.dense, n)
+		a, b = start // 64, (stop - 1) // 64
+		for n in range(a):
+			self.buf.dense[n] = 0
+		self.buf.dense[a] = ones << (start % 64)
+		for n in range(a + 1, b):
+			self.buf.dense[n] = ones
+		self.buf.dense[b] = ones >> ((-stop) % 64)
+		for n in range(b + 1, BITNSLOTS(BLOCKSIZE)):
+			self.buf.dense[n] = 0
 
 
 cdef block_and(Block *result, Block *self, Block *other):
@@ -446,7 +440,7 @@ cdef inline block_ixor(Block *self, Block *other):
 cdef inline bint block_issubset(Block *self, Block *other) nogil:
 	cdef int m = 0
 	cdef uint32_t n
-	if self.key != other.key or self.cardinality > other.cardinality:
+	if self.cardinality > other.cardinality:
 		return False
 	elif self.state == DENSE and other.state == DENSE:
 		return bitsubset(self.buf.dense, other.buf.dense)
@@ -499,8 +493,9 @@ cdef inline bint block_isdisjoint(Block *self, Block *other) nogil:
 	# could return counterexample, or -1 if True
 	cdef int m = 0
 	cdef uint32_t n
-	if (self.key != other.key
-			or self.cardinality + other.cardinality > BLOCKSIZE):
+	if self.cardinality == 0 or other.cardinality == 0:
+		return True
+	elif self.cardinality + other.cardinality > BLOCKSIZE:
 		return False
 	elif self.state == DENSE and other.state == DENSE:
 		for n in range(BITNSLOTS(BLOCKSIZE)):
@@ -510,29 +505,25 @@ cdef inline bint block_isdisjoint(Block *self, Block *other) nogil:
 		for n in range(other.cardinality):
 			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
 				return False
-	elif self.state == POSITIVE and other.state == INVERTED:
-		for n in range(self.cardinality):
-			m = binarysearch(other.buf.sparse,
-					m, BLOCKSIZE - other.cardinality,
-					self.buf.sparse[n])
-			if m < 0:
-				return False
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		for n in range(self.cardinality):
 			m = binarysearch(other.buf.sparse,
 					m, other.cardinality, self.buf.sparse[n])
 			if m >= 0:
 				return False
-			m = -m - 1
-			if m >= other.cardinality:
+			elif -m - 1 >= other.cardinality:
 				break
-	elif self.state == POSITIVE and other.state == DENSE:
+	elif self.state == POSITIVE and other.state == INVERTED:
+		for n in range(self.cardinality):
+			m = binarysearch(other.buf.sparse,
+					m, BLOCKSIZE - other.cardinality, self.buf.sparse[n])
+			if m < 0:
+				return False
+	elif (self.state == POSITIVE and other.state == DENSE
+			or self.state == INVERTED and other.state == POSITIVE):
 		return block_isdisjoint(other, self)
-	elif self.state == INVERTED and other.state == POSITIVE:
-		return block_isdisjoint(other, self)
-	elif self.state == INVERTED and other.state in (DENSE, INVERTED):
-		return False
-	elif self.state == DENSE and other.state == INVERTED:
+	elif (self.state == INVERTED and other.state in (DENSE, INVERTED)
+			or self.state == DENSE and other.state == INVERTED):
 		return False
 	return True
 
@@ -714,7 +705,6 @@ cdef inline int block_select(Block *self, int i) except -1:
 cdef block_copy(Block *dest, Block *src):
 	cdef size_t size = _getsize(src)
 	dest.state = src.state
-	dest.key = src.key
 	dest.cardinality = src.cardinality
 	if dest.state == DENSE:
 		dest.buf.dense = allocdense()
@@ -737,18 +727,18 @@ cdef block_copy(Block *dest, Block *src):
 # 	self.cardinality = BLOCKSIZE - self.cardinality
 
 
-cdef block_repr(Block *self):
+cdef block_repr(uint16_t key, Block *self):
 	if self.state == DENSE:
-		return 'D(key=%d, <%d bits set>)' % (self.key, self.cardinality)
+		return 'D(key=%d, <%d bits set>)' % (key, self.cardinality)
 	elif self.state == POSITIVE:
-		return 'P(key=%d, %r)' % (self.key, [
+		return 'P(key=%d, %r)' % (key, [
 				self.buf.sparse[n] for n in range(self.cardinality)])
 	elif self.state == INVERTED:
-		return 'I(key=%d, %r)' % (self.key, [
+		return 'I(key=%d, %r)' % (key, [
 				self.buf.sparse[n] for n in range(
 					BLOCKSIZE - self.cardinality)])
 	else:
-		return '?%d,%d,%d' % (self.state, self.key, self.cardinality)
+		return '?%d,%d,%d' % (self.state, key, self.cardinality)
 		# raise ValueError
 
 
