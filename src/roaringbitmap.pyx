@@ -22,20 +22,16 @@ Python ``set`` containing unsigned 32-bit integers:
 RoaringBitmap({5, 6, 7, 8, 9})
 """
 # TODOs
-# [ ] efficient serialization; compatible with original Roaring bitmap?
-# [ ] in-place vs. new bitmap; ImmutableRoaringBitmap
-# [ ] sequence API? (bitarray vs. bitset)
-# [ ] subclass Set ABC?
-# [ ] more operations: complement, shifts, get / set slices
-# [ ] check growth strategy of arrays
-# [ ] constructor for range (set slice)
-#     [x] init with range: RoaringBitmap(range(2, 4))
-#     [x] intersect/union/... inplace with range: a &= range(2, 4)
-#         => works because RoaringBitmap constructor will be called
-#     [x] set slice: a[2:4] = True; use a |= range(2, 4)
-# [ ] error checking, robustness
 # [ ] use SSE/AVX2 intrinsics
-# [ ] immutable variant; enables serialization w/mmap
+# [ ] immutable variant: ImmutableRoaringBitmap, in single contiguous block;
+#     enables serialization w/mmap
+# [ ] separate cardinality & binary ops for bitops
+# [ ] check growth strategy of arrays
+# [ ] more operations:
+#     [ ] shifts
+#     [ ] operate on slices without instantiating range as temp object
+# [ ] subclass Set ABC?
+# [ ] error checking, robustness
 
 import io
 import sys
@@ -64,6 +60,8 @@ include "bitops.pxi"
 include "arrayops.pxi"
 include "block.pxi"
 
+rangegen = xrange if sys.version_info[0] < 3 else range
+
 
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
@@ -74,32 +72,40 @@ cdef class RoaringBitmap(object):
 		self.size = 0
 
 	def __init__(self, iterable=None):
-		"""Return a new RoaringBitmap whose elements are taken from
-		``iterable``. The elements ``x`` of a RoaringBitmap must be
-		``0 <= x < 2 ** 32``.  If ``iterable`` is not specified, a new empty
-		RoaringBitmap is returned. Note that a sorted iterable will
-		significantly speed up the construction. ``iterable`` may be a
-		``range`` or ``xrange`` object."""
-		if isinstance(iterable, xrange if sys.version_info[0] < 3 else range):
+		"""Return a new RoaringBitmap with elements from ``iterable``.
+
+		The elements ``x`` of a RoaringBitmap must be ``0 <= x < 2 ** 32``.
+		If ``iterable`` is not specified, a new empty RoaringBitmap is
+		returned. Note that a sorted iterable will significantly speed up the
+		construction.
+		``iterable`` may be a generator, in which case the generator is
+		consumed incrementally.
+		``iterable`` may be a ``range`` (Python 3) or ``xrange`` (Python 2)
+		object, which will be constructed efficiently."""
+		cdef int n
+		cdef RoaringBitmap ob
+		if isinstance(iterable, rangegen):
 			_,  (start, stop, step) = iterable.__reduce__()
 			if step == 1:
 				self._initrange(start, stop)
 				return
-		if isinstance(iterable, (list, tuple, set)):
+		if isinstance(iterable, (list, tuple, set, dict)):
 			self._init2pass(iterable)
+		if isinstance(iterable, RoaringBitmap):
+			ob = iterable
+			self._extendarray(ob.size)
+			for n in range(ob.size):
+				self._insertcopy(self.size, ob.keys[n], &(ob.data[n]))
 		elif iterable is not None:
 			self._inititerator(iterable)
 
 	def __dealloc__(self):
 		if self.data is not NULL:
 			for n in range(self.size):
-				if self.data[n].buf.ptr is not NULL:
-					free(self.data[n].buf.ptr)
-					self.data[n].buf.ptr = NULL
-					self.data[n].cardinality = self.data[n].capacity = 0
-			free(<void *>self.data)
+				free(self.data[n].buf.ptr)
 			free(<void *>self.keys)
-			self.data = self.keys = NULL
+			free(<void *>self.data)
+			self.keys = self.data = NULL
 			self.size = 0
 
 	def __contains__(self, uint32_t elem):
@@ -161,14 +167,19 @@ cdef class RoaringBitmap(object):
 		low = block_pop(&(self.data[self.size - 1]))
 		return high << 16 | low
 
-	def __iand__(self, other):
-		cdef RoaringBitmap ob1 = ensurerb(self)
-		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int pos1 = 0, pos2 = 0
+	def __iand__(self, x):
+		cdef RoaringBitmap ob1 = self
+		cdef RoaringBitmap ob2 = ensurerb(x)
+		cdef int pos1 = 0, pos2 = 0, res = 0
+		cdef uint16_t *keys = NULL
+		cdef Block *data = NULL
 		if pos1 < ob1.size and pos2 < ob2.size:
+			ob1.capacity = min(ob1.size, ob2.size)
+			ob1._tmpalloc(self.capacity, &keys, &data)
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
-					self._removeatidx(pos1)
+					free(ob1.data[pos1].buf.ptr)
+					pos1 += 1
 					if pos1 == ob1.size:
 						break
 				elif ob1.keys[pos1] > ob2.keys[pos2]:
@@ -178,50 +189,32 @@ cdef class RoaringBitmap(object):
 				else:
 					block_iand(&(ob1.data[pos1]), &(ob2.data[pos2]))
 					if ob1.data[pos1].cardinality > 0:
-						pos1 += 1
+						keys[res] = ob1.keys[pos1]
+						data[res] = ob1.data[pos1]
+						res += 1
 					else:
-						self._removeatidx(pos1)
-					pos2 += 1
-					if pos1 == ob1.size or pos2 == ob2.size:
-						break
-		self._resize(pos1)  # drop everything after pos1 - 1
-		return ob1
-
-	def __ior__(self, other):
-		cdef RoaringBitmap ob1 = ensurerb(self)
-		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int pos1 = 0, pos2 = 0
-		if pos1 < ob1.size and pos2 < ob2.size:
-			while True:
-				if ob1.keys[pos1] < ob2.keys[pos2]:
-					pos1 += 1
-					if pos1 == ob1.size:
-						break
-				elif ob1.keys[pos1] > ob2.keys[pos2]:
-					ob1._insertcopy(pos1, ob2.keys[pos2], &(ob2.data[pos2]))
-					pos1 += 1
-					pos2 += 1
-					if pos2 == ob2.size:
-						break
-				else:
-					block_ior(&(ob1.data[pos1]), &(ob2.data[pos2]))
+						free(ob1.data[pos1].buf.ptr)
 					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
 						break
-		if pos1 == ob1.size and pos2 < ob2.size:
-			ob1._extendarray(ob2.size - pos2)
-			for pos2 in range(pos2, ob2.size):
-				ob1._insertcopy(ob1.size, ob2.keys[pos2], &(ob2.data[pos2]))
+			ob1._replacearrays(keys, data, res)
 		return ob1
 
-	def __isub__(self, other):
-		cdef RoaringBitmap ob1 = ensurerb(self)
-		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int pos1 = 0, pos2 = 0
+	def __isub__(self, x):
+		cdef RoaringBitmap ob1 = self
+		cdef RoaringBitmap ob2 = ensurerb(x)
+		cdef int pos1 = 0, pos2 = 0, res = 0
+		cdef uint16_t *keys = NULL
+		cdef Block *data = NULL
 		if pos1 < ob1.size and pos2 < ob2.size:
+			ob1.capacity = ob1.size
+			ob1._tmpalloc(ob1.capacity, &keys, &data)
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
+					keys[res] = ob1.keys[pos1]
+					data[res] = ob1.data[pos1]
+					res += 1
 					pos1 += 1
 					if pos1 == ob1.size:
 						break
@@ -232,43 +225,118 @@ cdef class RoaringBitmap(object):
 				else:  # ob1.keys[pos1] == ob2.keys[pos2]:
 					block_isub(&(ob1.data[pos1]), &(ob2.data[pos2]))
 					if ob1.data[pos1].cardinality > 0:
-						pos1 += 1
+						keys[res] = ob1.keys[pos1]
+						data[res] = ob1.data[pos1]
+						res += 1
 					else:
-						self._removeatidx(pos1)
+						free(ob1.data[pos1].buf.ptr)
+					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
 						break
+			if pos2 == ob2.size:
+				for pos1 in range(pos1, ob1.size):
+					keys[res] = ob1.keys[pos1]
+					data[res] = ob1.data[pos1]
+					res += 1
+			ob1._replacearrays(keys, data, res)
 		return ob1
 
-	def __ixor__(self, other):
-		cdef RoaringBitmap ob1 = ensurerb(self)
-		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int pos1 = 0, pos2 = 0
+	def __ior__(self, x):
+		cdef RoaringBitmap ob1 = self
+		cdef RoaringBitmap ob2 = ensurerb(x)
+		cdef int pos1 = 0, pos2 = 0, res = 0
+		cdef uint16_t *keys = NULL
+		cdef Block *data = NULL
+		if ob2.size == 0:
+			return ob1
+		ob1.capacity = ob1.size + ob2.size
+		ob1._tmpalloc(ob1.capacity, &keys, &data)
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
+					keys[res] = ob1.keys[pos1]
+					data[res] = ob1.data[pos1]
+					res += 1
 					pos1 += 1
 					if pos1 == ob1.size:
 						break
 				elif ob1.keys[pos1] > ob2.keys[pos2]:
-					ob1._insertcopy(pos1, ob2.keys[pos2], &(ob2.data[pos2]))
+					keys[res] = ob2.keys[pos2]
+					block_copy(&(data[res]), &(ob2.data[pos2]))
+					res += 1
+					pos2 += 1
+					if pos2 == ob2.size:
+						break
+				else:
+					block_ior(&(ob1.data[pos1]), &(ob2.data[pos2]))
+					keys[res] = ob1.keys[pos1]
+					data[res] = ob1.data[pos1]
+					res += 1
 					pos1 += 1
+					pos2 += 1
+					if pos1 == ob1.size or pos2 == ob2.size:
+						break
+		if pos1 == ob1.size:
+			for pos2 in range(pos2, ob2.size):
+				keys[res] = ob2.keys[pos2]
+				block_copy(&(data[res]), &(ob2.data[pos2]))
+				res += 1
+		elif pos2 == ob2.size:
+			for pos1 in range(pos1, ob1.size):
+				keys[res] = ob1.keys[pos1]
+				data[res] = ob1.data[pos1]
+				res += 1
+		ob1._replacearrays(keys, data, res)
+		return ob1
+
+	def __ixor__(self, x):
+		cdef RoaringBitmap ob1 = self
+		cdef RoaringBitmap ob2 = ensurerb(x)
+		cdef int pos1 = 0, pos2 = 0, res = 0
+		cdef uint16_t *keys = NULL
+		cdef Block *data = NULL
+		ob1.capacity = ob1.size + ob2.size
+		ob1._tmpalloc(ob1.capacity, &keys, &data)
+		if pos1 < ob1.size and pos2 < ob2.size:
+			while True:
+				if ob1.keys[pos1] < ob2.keys[pos2]:
+					keys[res] = ob1.keys[pos1]
+					data[res] = ob1.data[pos1]
+					res += 1
+					pos1 += 1
+					if pos1 == ob1.size:
+						break
+				elif ob1.keys[pos1] > ob2.keys[pos2]:
+					keys[res] = ob2.keys[pos2]
+					block_copy(&(data[res]), &(ob2.data[pos2]))
+					res += 1
 					pos2 += 1
 					if pos2 == ob2.size:
 						break
 				else:
 					block_ixor(&(ob1.data[pos1]), &(ob2.data[pos2]))
 					if ob1.data[pos1].cardinality > 0:
-						pos1 += 1
+						keys[res] = ob1.keys[pos1]
+						data[res] = ob1.data[pos1]
+						res += 1
 					else:
-						self._removeatidx(pos1)
+						free(ob1.data[pos1].buf.ptr)
+					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
 						break
 		if pos1 == ob1.size:
-			ob1._extendarray(ob2.size - pos2)
 			for pos2 in range(pos2, ob2.size):
-				ob1._insertcopy(ob1.size, ob2.keys[pos2], &(ob2.data[pos2]))
+				keys[res] = ob2.keys[pos2]
+				block_copy(&(data[res]), &(ob2.data[pos2]))
+				res += 1
+		elif pos2 == ob2.size:
+			for pos1 in range(pos1, ob1.size):
+				keys[res] = ob1.keys[pos1]
+				data[res] = ob1.data[pos1]
+				res += 1
+		ob1._replacearrays(keys, data, res)
 		return ob1
 
 	def __and__(x, y):
@@ -278,6 +346,7 @@ cdef class RoaringBitmap(object):
 		cdef int pos1 = 0, pos2 = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			result._extendarray(min(ob1.size, ob2.size))
+			# initialize to zero so that unallocated blocks can be detected
 			memset(result.data, 0, result.capacity * sizeof(Block))
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
@@ -289,56 +358,142 @@ cdef class RoaringBitmap(object):
 					if pos2 == ob2.size:
 						break
 				else:
-					if result.data[result.size].buf.ptr is NULL:
-						result.data[result.size].buf.sparse = allocsparse(
-								INITCAPACITY)
-						result.data[result.size].capacity = INITCAPACITY
-						result.data[result.size].state = POSITIVE
-					result.keys[result.size] = ob1.keys[pos1]
 					block_and(&(result.data[result.size]),
 							&(ob1.data[pos1]), &(ob2.data[pos2]))
 					if result.data[result.size].cardinality:
+						result.keys[result.size] = ob1.keys[pos1]
 						result.size += 1
 					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
 						break
+			if result.data[result.size].buf.ptr is not NULL:
+				free(result.data[result.size].buf.ptr)
 			result._resize(result.size)
 		return result
 
-	def __or__(self, other):
-		cdef RoaringBitmap result
-		if isinstance(self, RoaringBitmap):
-			result = self.copy()
-			result |= other
-		elif isinstance(other, RoaringBitmap):
-			result = other.copy()
-			result |= self
-		else:
-			raise ValueError
+	def __sub__(x, y):
+		cdef RoaringBitmap ob1 = ensurerb(x)
+		cdef RoaringBitmap ob2 = ensurerb(y)
+		cdef RoaringBitmap result = RoaringBitmap()
+		cdef int pos1 = 0, pos2 = 0
+		if pos1 < ob1.size and pos2 < ob2.size:
+			result._extendarray(ob1.size)
+			memset(result.data, 0, result.capacity * sizeof(Block))
+			while True:
+				if ob1.keys[pos1] < ob2.keys[pos2]:
+					result._insertcopy(
+							result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+					pos1 += 1
+					if pos1 == ob1.size:
+						break
+				elif ob1.keys[pos1] > ob2.keys[pos2]:
+					pos2 += 1
+					if pos2 == ob2.size:
+						break
+				else:  # ob1.keys[pos1] == ob2.keys[pos2]:
+					block_sub(&(result.data[result.size]),
+							&(ob1.data[pos1]), &(ob2.data[pos2]))
+					if ob1.data[pos1].cardinality > 0:
+						result.keys[result.size] = ob1.keys[pos1]
+						result.size += 1
+					pos1 += 1
+					pos2 += 1
+					if pos1 == ob1.size or pos2 == ob2.size:
+						break
+			if pos2 == ob2.size:
+				for pos1 in range(pos1, ob1.size):
+					result._insertcopy(
+							result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+		result._resize(result.size)
 		return result
 
-	def __xor__(self, other):
-		cdef RoaringBitmap result
-		if isinstance(self, RoaringBitmap):
-			result = self.copy()
-			result ^= other
-		elif isinstance(other, RoaringBitmap):
-			result = other.copy()
-			result ^= self
-		else:
-			raise ValueError
+	def __or__(x, y):
+		cdef RoaringBitmap ob1 = ensurerb(x)
+		cdef RoaringBitmap ob2 = ensurerb(y)
+		cdef RoaringBitmap result = RoaringBitmap()
+		cdef int pos1 = 0, pos2 = 0
+		if pos1 < ob1.size and pos2 < ob2.size:
+			result._extendarray(ob1.size + ob2.size)
+			memset(result.data, 0, result.capacity * sizeof(Block))
+			while True:
+				if ob1.keys[pos1] < ob2.keys[pos2]:
+					result._insertcopy(
+							result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+					pos1 += 1
+					if pos1 == ob1.size:
+						break
+				elif ob1.keys[pos1] > ob2.keys[pos2]:
+					result._insertcopy(
+							result.size, ob2.keys[pos2], &(ob2.data[pos2]))
+					pos2 += 1
+					if pos2 == ob2.size:
+						break
+				else:
+					block_or(&(result.data[result.size]),
+							&(ob1.data[pos1]), &(ob2.data[pos2]))
+					if ob1.data[pos1].cardinality > 0:
+						result.keys[result.size] = ob1.keys[pos1]
+						result.size += 1
+					pos1 += 1
+					pos2 += 1
+					if pos1 == ob1.size or pos2 == ob2.size:
+						break
+		if pos1 == ob1.size:
+			result._extendarray(ob2.size - pos2)
+			for pos2 in range(pos2, ob2.size):
+				result._insertcopy(result.size,
+						ob2.keys[pos2], &(ob2.data[pos2]))
+		elif pos2 == ob2.size:
+			result._extendarray(ob1.size - pos1)
+			for pos1 in range(pos1, ob1.size):
+				result._insertcopy(
+						result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+		result._resize(result.size)
 		return result
 
-	def __sub__(self, other):
-		cdef RoaringBitmap result
-		if isinstance(self, RoaringBitmap):
-			result = self.copy()
-		elif isinstance(other, RoaringBitmap):
-			result = RoaringBitmap(self)
-		else:
-			raise ValueError
-		result -= other
+	def __xor__(x, y):
+		cdef RoaringBitmap ob1 = ensurerb(x)
+		cdef RoaringBitmap ob2 = ensurerb(y)
+		cdef RoaringBitmap result = RoaringBitmap()
+		cdef int pos1 = 0, pos2 = 0
+		if pos1 < ob1.size and pos2 < ob2.size:
+			result._extendarray(ob1.size + ob2.size)
+			memset(result.data, 0, result.capacity * sizeof(Block))
+			while True:
+				if ob1.keys[pos1] < ob2.keys[pos2]:
+					result._insertcopy(
+							result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+					pos1 += 1
+					if pos1 == ob1.size:
+						break
+				elif ob1.keys[pos1] > ob2.keys[pos2]:
+					result._insertcopy(
+							result.size, ob2.keys[pos2], &(ob2.data[pos2]))
+					pos2 += 1
+					if pos2 == ob2.size:
+						break
+				else:
+					block_xor(&(result.data[result.size]),
+							&(ob1.data[pos1]), &(ob2.data[pos2]))
+					if ob1.data[pos1].cardinality > 0:
+						result.keys[result.size] = ob1.keys[pos1]
+						result.size += 1
+					pos1 += 1
+					pos2 += 1
+					if pos1 == ob1.size or pos2 == ob2.size:
+						break
+		if pos1 == ob1.size:
+			result._extendarray(ob2.size - pos2)
+			for pos2 in range(pos2, ob2.size):
+				result._insertcopy(
+						result.size, ob2.keys[pos2], &(ob2.data[pos2]))
+		elif pos2 == ob2.size:
+			result._extendarray(ob1.size - pos1)
+			for pos1 in range(pos1, ob1.size):
+				result._insertcopy(
+						result.size, ob1.keys[pos1], &(ob1.data[pos1]))
+		result._resize(result.size)
 		return result
 
 	def __len__(self):
@@ -347,31 +502,24 @@ cdef class RoaringBitmap(object):
 			result += self.data[n].cardinality
 		return result
 
-	def __richcmp__(self, other, op):
+	def __richcmp__(x, y, op):
 		cdef RoaringBitmap ob1, ob2
 		cdef int n
 		if op == 2:  # ==
-			if len(self) != len(other):
-				return False
-			if not isinstance(self, RoaringBitmap):
+			if not isinstance(x, RoaringBitmap):
 				# FIXME: what is best approach here?
 				# cost of constructing RoaringBitmap vs loss of sort with set()
-				# if other is small, constructing RoaringBitmap is better.
-				if len(self) < 1024:
-					return RoaringBitmap(self) == other
-				else:
-					return self == set(other)
-			elif not isinstance(other, RoaringBitmap):
-				if len(other) < 1024:
-					return self == RoaringBitmap(other)
-				else:
-					return set(self) == other
-			ob1, ob2 = self, other
+				# if non-RoaringBitmap is small, constructing new one is better
+				return RoaringBitmap(x) == y if len(x) < 1024 else x == set(y)
+			elif not isinstance(y, RoaringBitmap):
+				return x == RoaringBitmap(y) if len(y) < 1024 else set(x) == y
+			ob1, ob2 = x, y
 			if ob1.size != ob2.size:
 				return False
+			if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
+				return False
 			for n in range(ob1.size):
-				if (ob1.keys[n] != ob2.keys[n]
-						or ob1.data[n].cardinality != ob2.data[n].cardinality):
+				if ob1.data[n].cardinality != ob2.data[n].cardinality:
 					return False
 			for n in range(ob1.size):
 				if memcmp(ob1.data[n].buf.sparse, ob2.data[n].buf.sparse,
@@ -379,15 +527,15 @@ cdef class RoaringBitmap(object):
 					return False
 			return True
 		elif op == 3:  # !=
-			return not (self == other)
+			return not (x == y)
 		elif op == 1:  # <=
-			return self.issubset(other)
+			return ensurerb(x).issubset(y)
 		elif op == 5:  # >=
-			return self.issuperset(other)
+			return ensurerb(x).issuperset(y)
 		elif op == 0:  # <
-			return len(self) < len(other) and self.issubset(other)
+			return len(x) < len(y) and ensurerb(x).issubset(y)
 		elif op == 4:  # >
-			return len(self) > len(other) and self.issuperset(other)
+			return len(x) > len(y) and ensurerb(x).issuperset(y)
 		return NotImplemented
 
 	def __iter__(self):
@@ -470,14 +618,18 @@ cdef class RoaringBitmap(object):
 				return True
 		return False
 
+	def __str__(self):
+		return '{%s}' % ', '.join(str(a) for a in self)
+
 	def __repr__(self):
 		return 'RoaringBitmap({%s})' % ', '.join(str(a) for a in self)
 
 	def debuginfo(self):
 		"""Return a string with the internal representation of this bitmap."""
-		return 'RoaringBitmap(<%s>)' % ', '.join([
-				block_repr(self.keys[n], &(self.data[n]))
-				for n in range(self.size)])
+		return 'size=%d, cap=%d, data={%s}' % (
+				self.size, self.capacity,
+				', '.join([block_repr(self.keys[n], &(self.data[n]))
+				for n in range(self.size)]))
 
 	def __getstate__(self):
 		cdef array.array state
@@ -517,7 +669,7 @@ cdef class RoaringBitmap(object):
 		self.keys = <uint16_t *>realloc(self.keys, indexlen * sizeof(uint16_t))
 		self.data = <Block *>realloc(self.data, indexlen * sizeof(Block))
 		if self.keys is NULL or self.data is NULL:
-			raise MemoryError
+			raise MemoryError(indexlen)
 		self.capacity = self.size = indexlen
 		memcpy(self.keys, &(buf[offset]), indexlen * sizeof(uint16_t))
 		offset += indexlen * sizeof(uint16_t)
@@ -543,16 +695,13 @@ cdef class RoaringBitmap(object):
 		"""Remove all elements from this RoaringBitmap."""
 		cdef int n
 		for n in range(self.size):
-			if self.data[n].buf.ptr is not NULL:
-				free(self.data[n].buf.ptr)
-				self.data[n].buf.ptr = NULL
-				self.data[n].cardinality = self.data[n].capacity = 0
+			free(self.data[n].buf.ptr)
 		self.size = 0
 		self.keys = <uint16_t *>realloc(
 				self.keys, INITCAPACITY * sizeof(uint16_t))
 		self.data = <Block *>realloc(self.data, INITCAPACITY * sizeof(Block))
 		if self.keys is NULL or self.data is NULL:
-			raise MemoryError
+			raise MemoryError(INITCAPACITY)
 		self.capacity = INITCAPACITY
 
 	def copy(self):
@@ -643,8 +792,16 @@ cdef class RoaringBitmap(object):
 	def update(self, *bitmaps):
 		"""In-place union update of this RoaringBitmap.
 
-		With one argument, add items from any iterable to this bitmap;
+		With one argument, add items from the iterable to this bitmap;
 		with more arguments: add the union of given ``RoaringBitmap`` objects.
+
+		NB: since range objects are recognized by the constructor, this
+		provides an efficient way to set a range of bits:
+
+		>>> rb = RoaringBitmap(range(5))
+		>>> rb.update(range(3, 7))
+		>>> rb
+		RoaringBitmap({0, 1, 2, 3, 4, 5, 6})
 		"""
 		cdef RoaringBitmap bitmap1, bitmap2
 		if len(bitmaps) == 0:
@@ -664,7 +821,16 @@ cdef class RoaringBitmap(object):
 
 	def intersection_update(self, *bitmaps):
 		"""Intersect this bitmap in-place with one or more ``RoaringBitmap``
-		objects."""
+		objects.
+
+		NB: since range objects are recognized by the constructor, this
+		provides an efficient way to restrict the set to a range of elements:
+
+		>>> rb = RoaringBitmap(range(5))
+		>>> rb.intersection_update(range(3, 7))
+		>>> rb
+		RoaringBitmap({3, 4})
+		"""
 		cdef RoaringBitmap bitmap
 		if len(bitmaps) == 0:
 			return
@@ -684,13 +850,18 @@ cdef class RoaringBitmap(object):
 		"""Update bitmap to symmetric difference of itself and another."""
 		self ^= other
 
+	def flip_range(self, uint32_t start, uint32_t stop):
+		"""In-place negation for range(start, stop)."""
+		self.symmetric_difference_update(rangegen(start, stop))
+
 	def intersection_len(self, other):
 		"""Return the cardinality of the intersection.
 
 		Optimized version of ``len(self & other)``."""
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int result = 0, pos1 = 0, pos2 = 0
+		cdef uint32_t result = 0
+		cdef int pos1 = 0, pos2 = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
@@ -712,7 +883,8 @@ cdef class RoaringBitmap(object):
 	def union_len(self, other):
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int result = 0, pos1 = 0, pos2 = 0
+		cdef uint32_t result = 0
+		cdef int pos1 = 0, pos2 = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
@@ -742,11 +914,11 @@ cdef class RoaringBitmap(object):
 	def jaccard_dist(self, other):
 		"""Return the Jaccard distance.
 
-		Counts of union and intersection are performed simulteously.
-		Optimized version of ``1 - len(self & other) / len(self | other)``."""
+		Optimized version of ``1 - len(self & other) / len(self | other)``.
+		Counts of union and intersection are performed simultaneously."""
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef int union_result = 0, intersection_result = 0, tmp1, tmp2
+		cdef uint32_t union_result = 0, intersection_result = 0, tmp1, tmp2
 		cdef int pos1 = 0, pos2 = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
@@ -794,7 +966,7 @@ cdef class RoaringBitmap(object):
 	def select(self, int i):
 		"""Return the ith element that is in this bitmap.
 
-		:param i: a 1-based index."""
+		:param i: a 0-based index."""
 		cdef int leftover = i, n
 		cdef uint32_t keycontrib, lowcontrib
 		for n in range(self.size):
@@ -805,6 +977,50 @@ cdef class RoaringBitmap(object):
 			leftover -= self.data[n].cardinality
 		raise IndexError('select: index %d out of range 0..%d.' % (
 				i, len(self)))
+
+	def index(self, uint32_t x):
+		"""Return the 0-based index of `x` in sorted elements of bitmap."""
+		if x in self:
+			return self.rank(x) - 1
+		raise IndexError
+
+	def _ridx(self, i):
+		if i < 0:
+			return len(self) - i
+		return i
+
+	def __getitem__(self, i):
+		"""Get element with rank `i`."""
+		if isinstance(i, slice):
+			# negative indices, step
+			return self.intersection(
+					range(self.select(self._ridx(i.start)),
+						self.select(self._ridx(i.stop) - 1) + 1), i.step)
+		if i < 0:
+			i = len(self) - i
+		return self.select(i)
+
+	def __delitem__(self, i):
+		"""Discard element with rank `i`."""
+		if isinstance(i, slice):
+			self.difference_update(
+					range(self.select(self._ridx(i.start)),
+						self.select(self._ridx(i.stop) - 1) + 1), i.step)
+		if i < 0:
+			i = len(self) - i
+		self.discard(self.select(i))
+
+	def __setitem__(self, i, x):
+		"""Set element with rank `i` to False."""
+		if not bool(x):
+			self.__delitem__(i)
+		if isinstance(i, slice):
+			self.update(
+					range(self.select(self._ridx(i.start)),
+						self.select(self._ridx(i.stop) - 1) + 1), i.step)
+		raise NotImplementedError('use RoaringBitmap.add(x) to add an '
+				'element; The ith element is by definition '
+				'already in the set.')
 
 	def _initrange(self, uint32_t start, uint32_t stop):
 		cdef Block *block = NULL
@@ -900,7 +1116,7 @@ cdef class RoaringBitmap(object):
 				newcapacity * sizeof(uint16_t))
 		self.data = <Block *>realloc(self.data, newcapacity * sizeof(Block))
 		if self.keys is NULL or self.data is NULL:
-			raise MemoryError
+			raise MemoryError(newcapacity)
 		self.capacity = newcapacity
 
 	cdef _resize(self, int k):
@@ -908,9 +1124,7 @@ cdef class RoaringBitmap(object):
 		cdef int n
 		if k > INITCAPACITY and k * 2 < self.capacity:
 			for n in range(k, self.size):
-				if self.data[n].buf.ptr is not NULL:
-					free(self.data[n].buf.ptr)
-					self.data[n].buf.ptr = NULL
+				free(self.data[n].buf.ptr)
 			self.keys = <uint16_t *>realloc(self.keys, k * sizeof(uint16_t))
 			self.data = <Block *>realloc(self.data, k * sizeof(Block))
 			if self.keys is NULL or self.data is NULL:
@@ -918,11 +1132,23 @@ cdef class RoaringBitmap(object):
 			self.capacity = k
 		self.size = k
 
+	cdef _tmpalloc(self, int size, uint16_t **keys, Block **data):
+		keys[0] = <uint16_t *>malloc(size * sizeof(uint16_t))
+		data[0] = <Block *>calloc(size, sizeof(Block))
+		if keys[0] is NULL or data[0] is NULL:
+			raise MemoryError(size)
+
+	cdef _replacearrays(self, uint16_t *keys, Block *data, int size):
+		free(self.keys)
+		free(self.data)
+		self.keys = keys
+		self.data = data
+		self.size = size
+		self._resize(self.size)  # truncate
+
 	cdef _removeatidx(self, int i):
 		"""Remove the i'th element."""
-		if self.data[i].buf.ptr is not NULL:
-			free(self.data[i].buf.ptr)
-			self.data[i].buf.ptr = NULL
+		free(self.data[i].buf.ptr)
 		memmove(&(self.keys[i]), &(self.keys[i + 1]),
 				(self.size - i - 1) * sizeof(uint16_t))
 		memmove(&(self.data[i]), &(self.data[i + 1]),
@@ -960,8 +1186,6 @@ cdef class RoaringBitmap(object):
 			elif self.data[i].state in (POSITIVE, INVERTED):
 				self.data[i].buf.sparse = allocsparse(size)
 				self.data[i].capacity = size
-			else:
-				raise ValueError
 			memcpy(self.data[i].buf.ptr, block.buf.ptr,
 					size * sizeof(uint16_t))
 		self.size += 1
@@ -1008,25 +1232,25 @@ cdef class RoaringBitmap(object):
 
 
 cdef RoaringBitmap ensurerb(obj):
-	"""Coerce ``obj`` to RoaringBitmap if necessary."""
+	"""Convert set-like ``obj`` to RoaringBitmap if necessary."""
 	if isinstance(obj, RoaringBitmap):
 		return obj
 	return RoaringBitmap(obj)
 
 
-cdef inline uint16_t highbits(uint32_t x):
+cdef inline uint16_t highbits(uint32_t x) nogil:
 	return x >> 16
 
 
-cdef inline uint16_t lowbits(uint32_t x):
+cdef inline uint16_t lowbits(uint32_t x) nogil:
 	return x & 0xFFFF
 
 
-cdef inline int min(int a, int b):
+cdef inline uint32_t min(uint32_t a, uint32_t b) nogil:
 	return a if a <= b else b
 
 
-cdef inline int max(int a, int b):
+cdef inline uint32_t max(uint32_t a, uint32_t b) nogil:
 	return a if a >= b else b
 
 

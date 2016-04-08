@@ -36,7 +36,7 @@ debug2:
 	python2-dbg setup.py install --user --with-cython --debug
 
 testdebug: debug
-	gdb -ex run --args python3-dbg `which py.test` tests/unittests.py -vv
+	gdb -ex run --args python3-dbg `which py.test` tests/unittests.py -v
 
 testdebug2: debug2
-	gdb -ex run --args python2-dbg `which py.test` tests/unittests.py -vv
+	gdb -ex run --args python2-dbg `which py.test` tests/unittests.py -v

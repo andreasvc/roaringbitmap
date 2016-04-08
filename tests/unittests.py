@@ -37,7 +37,6 @@ def single():
 
 @pytest.fixture(scope='module')
 def pair():
-	random.seed(42)
 	result = []
 	for a in single():
 		for b in single():

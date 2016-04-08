@@ -1,6 +1,7 @@
 # Set / search operations on arrays
 
-cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem) nogil:
+cdef inline int binarysearch(uint16_t *data, int begin, int end,
+		uint16_t elem) nogil:
 	"""Binary search for short `elem` in array `data`.
 
 	:returns: positive index ``i`` if ``elem`` is found; negative value ``i``
@@ -24,7 +25,8 @@ cdef int binarysearch(uint16_t *data, int begin, int end, uint16_t elem) nogil:
 	return -(low + 1)
 
 
-cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem) nogil:
+cdef inline int advance(uint16_t *data, int pos, int length,
+		uint16_t minitem) nogil:
 	cdef int lower = pos + 1
 	cdef int spansize = 1
 	cdef int upper, mid
@@ -49,7 +51,7 @@ cdef int advance(uint16_t *data, int pos, int length, uint16_t minitem) nogil:
 	return upper
 
 
-cdef int intersect2by2(uint16_t *data1, uint16_t *data2,
+cdef uint32_t intersect2by2(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest) nogil:
 	if length1 * 64 < length2:
 		return intersectgalloping(data1, length1, data2, length2, dest)
@@ -58,7 +60,7 @@ cdef int intersect2by2(uint16_t *data1, uint16_t *data2,
 	return intersectlocal2by2(data1, data2, length1, length2, dest)
 
 
-cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
+cdef inline int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length1 == 0 or length2 == 0:
@@ -90,7 +92,7 @@ cdef int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 				return pos
 
 
-cdef int intersectgalloping(
+cdef inline int intersectgalloping(
 		uint16_t *small, int lensmall,
 		uint16_t *large, int lenlarge,
 		uint16_t *dest) nogil:
@@ -119,7 +121,8 @@ cdef int intersectgalloping(
 
 
 cdef int union2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest, int *intersect_count) nogil:
+		int length1, int length2, uint16_t *dest,
+		uint32_t *intersect_count) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0, n_elems
 	if length2 == 0:
 		if dest is not NULL:
@@ -251,7 +254,7 @@ cdef int xor2by2(uint16_t *data1, uint16_t *data2,
 
 
 cdef void symmetricdifflen(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, int *diff1, int *diff2) nogil:
+		int length1, int length2, uint32_t *diff1, uint32_t *diff2) nogil:
 	"""Computes length of differences. diff1 will equal |data1 - data2|,
 	diff2 will equal |data2 - data1|."""
 	cdef int k1 = 0, k2 = 0

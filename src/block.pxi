@@ -11,7 +11,7 @@ cdef inline bint block_contains(Block *self, uint16_t elem) nogil:
 	return found
 
 
-cdef inline block_add(Block *self, uint16_t elem):
+cdef inline void block_add(Block *self, uint16_t elem) nogil:
 	cdef int i
 	if self.state == DENSE:
 		if not TESTBIT(self.buf.dense, elem):
@@ -28,7 +28,7 @@ cdef inline block_add(Block *self, uint16_t elem):
 			_removeatidx(self, i)
 
 
-cdef inline block_discard(Block *self, uint16_t elem):
+cdef inline void block_discard(Block *self, uint16_t elem) nogil:
 	cdef int i
 	if self.state == DENSE:
 		if TESTBIT(self.buf.dense, elem):
@@ -47,7 +47,7 @@ cdef inline block_discard(Block *self, uint16_t elem):
 			block_convert(self)
 
 
-cdef inline uint32_t block_pop(Block *self) except 1 << 16:
+cdef uint64_t block_pop(Block *self) except 1 << 16:
 	"""Remove and return the largest element."""
 	cdef uint32_t n
 	cdef uint64_t cur
@@ -81,7 +81,7 @@ cdef inline uint32_t block_pop(Block *self) except 1 << 16:
 			return low
 
 
-cdef inline block_initrange(Block *self, uint16_t start, uint32_t stop):
+cdef void block_initrange(Block *self, uint16_t start, uint32_t stop) nogil:
 	"""Allocate block and set a range of elements."""
 	cdef uint32_t n, a, b
 	cdef uint64_t ones = ~(<uint64_t>0)
@@ -115,9 +115,9 @@ cdef inline block_initrange(Block *self, uint16_t start, uint32_t stop):
 			self.buf.dense[n] = 0
 
 
-cdef block_and(Block *result, Block *self, Block *other):
-	"""Non-inplace intersection; result must be preallocated."""
-	cdef int n, dummy = 0, length = 0, alloc
+cdef void block_and(Block *result, Block *self, Block *other) nogil:
+	"""Non-inplace intersection; result may be preallocated."""
+	cdef uint32_t n, alloc, dummy = 0, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 		result.cardinality = bitsetintersect(result.buf.dense,
@@ -160,15 +160,171 @@ cdef block_and(Block *result, Block *self, Block *other):
 		block_and(result, other, self)
 	elif self.state == POSITIVE and other.state == DENSE:
 		block_and(result, other, self)
-	else:
-		block_copy(result, self)
-		block_iand(result, other)
+	elif self.state == DENSE and other.state == INVERTED:
+		block_iand(block_copy(result, self), other)
+	elif self.state == INVERTED and other.state == DENSE:
+		block_iand(block_copy(result, other), self)
 
 
-cdef inline block_iand(Block *self, Block *other):
+cdef void block_or(Block *result, Block *self, Block *other) nogil:
+	"""Non-inplace union; result may be preallocated."""
+	cdef uint32_t alloc, dummy = 0, length = 0
+	if self.state == DENSE and other.state == DENSE:
+		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
+		result.cardinality = bitsetunion(result.buf.dense,
+				self.buf.dense, other.buf.dense)
+	elif self.state == POSITIVE and other.state == POSITIVE:
+		alloc = self.cardinality + other.cardinality
+		_resizeconvert(result, POSITIVE, alloc)
+		result.cardinality = union2by2(
+				self.buf.sparse, other.buf.sparse,
+				self.cardinality, other.cardinality,
+				result.buf.sparse, &dummy)
+		_resize(result, result.cardinality)
+	elif self.state == INVERTED and other.state == INVERTED:
+		alloc = BLOCKSIZE - min(self.cardinality, other.cardinality)
+		_resizeconvert(result, INVERTED, alloc)
+		length = intersect2by2(
+				self.buf.sparse, other.buf.sparse,
+				BLOCKSIZE - self.cardinality, BLOCKSIZE - other.cardinality,
+				result.buf.sparse)
+		result.cardinality = BLOCKSIZE - length
+		_resize(result, length)
+	elif self.state == POSITIVE and other.state == INVERTED:
+		_resizeconvert(result, INVERTED, BLOCKSIZE - other.cardinality)
+		length = difference(
+				other.buf.sparse, self.buf.sparse,
+				BLOCKSIZE - other.cardinality, self.cardinality,
+				result.buf.sparse)
+		result.cardinality = BLOCKSIZE - length
+		_resize(result, length)
+	elif self.state == INVERTED and other.state == POSITIVE:
+		block_or(result, other, self)
+	elif self.state == POSITIVE and other.state == DENSE:
+		block_ior(block_copy(result, other), self)
+	elif self.state == DENSE and other.state == POSITIVE:
+		block_ior(block_copy(result, self), other)
+	elif self.state == DENSE and other.state == INVERTED:
+		block_ior(block_copy(result, other), self)
+	elif self.state == INVERTED and other.state == DENSE:
+		block_ior(block_copy(result, self), other)
+
+
+cdef void block_xor(Block *result, Block *self, Block *other) nogil:
+	"""Non-inplace xor; result may be preallocated."""
+	cdef int n, length = 0, alloc
+	if self.state == DENSE and other.state == DENSE:
+		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
+		result.cardinality = bitsetxor(result.buf.dense,
+				self.buf.dense, other.buf.dense)
+	elif self.state == POSITIVE and other.state == POSITIVE:
+		alloc = self.cardinality + other.cardinality
+		_resizeconvert(result, POSITIVE, alloc)
+		result.cardinality = xor2by2(
+				self.buf.sparse, other.buf.sparse,
+				self.cardinality, other.cardinality,
+				result.buf.sparse)
+		_resize(result, result.cardinality)
+	elif self.state == INVERTED and other.state == INVERTED:
+		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		_resizeconvert(result, INVERTED, alloc)
+		length = xor2by2(
+				self.buf.sparse, other.buf.sparse,
+				BLOCKSIZE - self.cardinality, BLOCKSIZE - other.cardinality,
+				result.buf.sparse)
+		result.cardinality = BLOCKSIZE - length
+		_resize(result, length)
+	elif self.state == POSITIVE and other.state == INVERTED:
+		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
+		result.cardinality = self.cardinality
+		for n in range(self.cardinality):
+			SETBIT(result.buf.dense, self.buf.sparse[n])
+		for n in range(BLOCKSIZE - other.cardinality):
+			if TESTBIT(result.buf.dense, other.buf.sparse[n]):
+				CLEARBIT(result.buf.dense, other.buf.sparse[n])
+				result.cardinality -= 1
+			else:
+				SETBIT(result.buf.dense, other.buf.sparse[n])
+				result.cardinality += 1
+	elif self.state == INVERTED and other.state == POSITIVE:
+		block_xor(result, other, self)
+	elif self.state == DENSE and other.state == INVERTED:
+		block_ixor(block_copy(result, self), other)
+	elif self.state == INVERTED and other.state == DENSE:
+		block_ixor(block_copy(result, other), self)
+	elif self.state == DENSE and other.state == POSITIVE:
+		block_ixor(block_copy(result, self), other)
+	elif self.state == POSITIVE and other.state == DENSE:
+		block_ixor(block_copy(result, other), self)
+
+
+cdef void block_sub(Block *result, Block *self, Block *other) nogil:
+	"""Non-inplace subtract; result may be preallocated."""
+	cdef uint32_t n, alloc, dummy = 0, length = 0
+	if self.state == DENSE and other.state == DENSE:
+		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
+		result.cardinality = bitsetsubtract(result.buf.dense,
+				self.buf.dense, other.buf.dense)
+	elif self.state == POSITIVE and other.state == POSITIVE:
+		_resizeconvert(result, POSITIVE, self.cardinality)
+		result.cardinality = difference(
+				self.buf.sparse, other.buf.sparse,
+				self.cardinality, other.cardinality,
+				result.buf.sparse)
+		_resize(result, result.cardinality)
+	elif self.state == INVERTED and other.state == INVERTED:
+		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		_resizeconvert(result, INVERTED, alloc)
+		length = union2by2(
+				self.buf.sparse, other.buf.sparse,
+				BLOCKSIZE - self.cardinality, BLOCKSIZE - other.cardinality,
+				result.buf.sparse, &dummy)
+		result.cardinality = BLOCKSIZE - length
+		_resize(result, length)
+	elif self.state == POSITIVE and other.state == INVERTED:
+		_resizeconvert(result, POSITIVE, self.cardinality)
+		result.cardinality = intersect2by2(
+				self.buf.sparse, other.buf.sparse,
+				self.cardinality, BLOCKSIZE - other.cardinality,
+				result.buf.sparse)
+		_resize(result, result.cardinality)
+	elif self.state == INVERTED and other.state == POSITIVE:
+		_resizeconvert(result, POSITIVE, self.cardinality)
+		length = intersect2by2(
+				self.buf.sparse, other.buf.sparse,
+				BLOCKSIZE - self.cardinality, other.cardinality,
+				result.buf.sparse)
+		result.cardinality = BLOCKSIZE - length
+		_resize(result, length)
+	elif self.state == POSITIVE and other.state == DENSE:
+		_resizeconvert(result, POSITIVE, self.cardinality)
+		for n in range(self.cardinality):
+			if not TESTBIT(other.buf.dense, self.buf.sparse[n]):
+				result.buf.sparse[length] = self.buf.sparse[n]
+				length += 1
+		result.cardinality = length
+		_resize(self, length)
+	elif self.state == DENSE and other.state == INVERTED:
+		_resizeconvert(result, POSITIVE, BLOCKSIZE - other.cardinality)
+		for n in range(other.cardinality):
+			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
+				result.buf.sparse[length] = n
+				length += 1
+		result.cardinality = length
+		_resize(self, length)
+	elif self.state == INVERTED and other.state == DENSE:
+		replacearray(result, block_asdense(self),
+				BITMAPSIZE // sizeof(uint16_t))
+		result.cardinality = self.cardinality
+		result.state = DENSE
+		block_isub(result, other)
+	elif self.state == DENSE and other.state == POSITIVE:
+		block_isub(block_copy(result, self), other)
+
+
+cdef void block_iand(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef int length = 0, dummy = 0, alloc
-	cdef uint32_t n
+	cdef uint32_t n, alloc, dummy = 0, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		self.cardinality = bitsetintersectinplace(
 				self.buf.dense, other.buf.dense)
@@ -176,8 +332,7 @@ cdef inline block_iand(Block *self, Block *other):
 		buf.sparse = allocsparse(other.cardinality)
 		self.cardinality = 0
 		for n in range(other.cardinality):
-			if TESTBIT(self.buf.dense,
-					other.buf.sparse[n]):
+			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
 				buf.sparse[self.cardinality] = other.buf.sparse[n]
 				self.cardinality += 1
 		replacearray(self, buf, other.cardinality)
@@ -242,10 +397,9 @@ cdef inline block_iand(Block *self, Block *other):
 	block_convert(self)
 
 
-cdef inline block_ior(Block *self, Block *other):
+cdef void block_ior(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef int length = 0, alloc
-	cdef uint32_t n
+	cdef uint32_t n, alloc, dummy = 0, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		self.cardinality = bitsetunioninplace(
 				self.buf.dense, other.buf.dense)
@@ -293,11 +447,11 @@ cdef inline block_ior(Block *self, Block *other):
 		self.cardinality = union2by2(
 				self.buf.sparse, other.buf.sparse,
 				self.cardinality, other.cardinality,
-				buf.sparse, &length)
+				buf.sparse, &dummy)
 		replacearray(self, buf, alloc)
 		_resize(self, self.cardinality)
 	elif self.state == POSITIVE and other.state == INVERTED:
-		buf.sparse = allocsparse(BLOCKSIZE - self.cardinality)
+		buf.sparse = allocsparse(BLOCKSIZE - other.cardinality)
 		length = difference(
 				other.buf.sparse, self.buf.sparse,
 				BLOCKSIZE - other.cardinality, self.cardinality,
@@ -323,10 +477,9 @@ cdef inline block_ior(Block *self, Block *other):
 	block_convert(self)
 
 
-cdef inline block_isub(Block *self, Block *other):
+cdef void block_isub(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef int length = 0, dummy = 0, alloc
-	cdef uint32_t n
+	cdef uint32_t n, alloc, dummy = 0, length = 0,
 	if self.state == INVERTED and other.state == DENSE:
 		block_todense(self)
 	# fall through
@@ -348,6 +501,7 @@ cdef inline block_isub(Block *self, Block *other):
 				length += 1
 		replacearray(self, buf, alloc)
 		self.cardinality = length
+		self.state = POSITIVE
 		_resize(self, length)
 	elif self.state == POSITIVE and other.state == DENSE:
 		for n in range(self.cardinality):
@@ -387,10 +541,9 @@ cdef inline block_isub(Block *self, Block *other):
 	block_convert(self)
 
 
-cdef inline block_ixor(Block *self, Block *other):
+cdef void block_ixor(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef int length = 0, alloc
-	cdef uint32_t n
+	cdef uint32_t n, length = 0, alloc
 	if ((self.state == POSITIVE and other.state == DENSE)
 			or (self.state == POSITIVE and other.state == INVERTED)
 			or (self.state == INVERTED and other.state == DENSE)
@@ -437,7 +590,7 @@ cdef inline block_ixor(Block *self, Block *other):
 	block_convert(self)
 
 
-cdef inline bint block_issubset(Block *self, Block *other) nogil:
+cdef bint block_issubset(Block *self, Block *other) nogil:
 	cdef int m = 0
 	cdef uint32_t n
 	if self.cardinality > other.cardinality:
@@ -489,7 +642,7 @@ cdef inline bint block_issubset(Block *self, Block *other) nogil:
 	return True
 
 
-cdef inline bint block_isdisjoint(Block *self, Block *other) nogil:
+cdef bint block_isdisjoint(Block *self, Block *other) nogil:
 	# could return counterexample, or -1 if True
 	cdef int m = 0
 	cdef uint32_t n
@@ -498,9 +651,7 @@ cdef inline bint block_isdisjoint(Block *self, Block *other) nogil:
 	elif self.cardinality + other.cardinality > BLOCKSIZE:
 		return False
 	elif self.state == DENSE and other.state == DENSE:
-		for n in range(BITNSLOTS(BLOCKSIZE)):
-			if self.buf.dense[n] & other.buf.dense[n]:
-				return False
+		return bitdisjoint(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
 		for n in range(other.cardinality):
 			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
@@ -528,10 +679,9 @@ cdef inline bint block_isdisjoint(Block *self, Block *other) nogil:
 	return True
 
 
-cdef inline int block_andlen(Block *self, Block *other) nogil:
+cdef uint32_t block_andlen(Block *self, Block *other) nogil:
 	"""Cardinality of intersection."""
-	cdef int result = 0, dummy = 0
-	cdef uint32_t n
+	cdef uint32_t n, dummy = 0, result = 0
 	if self.state == DENSE and other.state == DENSE:
 		result = bitsetintersectcount(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
@@ -567,10 +717,9 @@ cdef inline int block_andlen(Block *self, Block *other) nogil:
 	return result
 
 
-cdef inline int block_orlen(Block *self, Block *other) nogil:
+cdef uint32_t block_orlen(Block *self, Block *other) nogil:
 	"""Cardinality of union."""
-	cdef int result = 0, dummy = 0
-	cdef uint32_t n
+	cdef uint32_t n, dummy = 0, result = 0
 	if self.state == DENSE and other.state == DENSE:
 		result = bitsetunioncount(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
@@ -605,8 +754,8 @@ cdef inline int block_orlen(Block *self, Block *other) nogil:
 	return result
 
 
-cdef inline void block_andorlen(Block *self, Block *other,
-		int *intersection_result, int *union_result) nogil:
+cdef void block_andorlen(Block *self, Block *other,
+		uint32_t *intersection_result, uint32_t *union_result) nogil:
 	"""Cardinality of both intersection and union."""
 	cdef uint32_t n
 	if self.state == DENSE and other.state == DENSE:
@@ -650,7 +799,7 @@ cdef inline void block_andorlen(Block *self, Block *other,
 		block_andorlen(other, self, intersection_result, union_result)
 
 
-cdef inline int block_rank(Block *self, uint16_t x) nogil:
+cdef int block_rank(Block *self, uint16_t x) nogil:
 	"""Number of 1-bits in this bitmap ``<= x``."""
 	cdef int result = 0
 	cdef int leftover
@@ -679,7 +828,7 @@ cdef inline int block_rank(Block *self, uint16_t x) nogil:
 			return x + result - 1
 
 
-cdef inline int block_select(Block *self, int i) except -1:
+cdef int block_select(Block *self, int i) except -1:
 	"""Find smallest x s.t. rank(x) >= i."""
 	cdef int n, w = 0
 	cdef size_t size
@@ -702,16 +851,13 @@ cdef inline int block_select(Block *self, int i) except -1:
 		return self.buf.sparse[size - 1] + i - size
 
 
-cdef block_copy(Block *dest, Block *src):
+cdef Block *block_copy(Block *dest, Block *src) nogil:
+	"""Copy src to dest; dest may be preallocated."""
 	cdef size_t size = _getsize(src)
-	dest.state = src.state
+	_resizeconvert(dest, src.state, size)
 	dest.cardinality = src.cardinality
-	if dest.state == DENSE:
-		dest.buf.dense = allocdense()
-	else:
-		dest.buf.sparse = allocsparse(size)
-		dest.capacity = size
 	memcpy(dest.buf.ptr, src.buf.ptr, size * sizeof(uint16_t))
+	return dest
 
 
 # cdef flip(Block *self):
@@ -727,22 +873,24 @@ cdef block_copy(Block *dest, Block *src):
 # 	self.cardinality = BLOCKSIZE - self.cardinality
 
 
-cdef block_repr(uint16_t key, Block *self):
+cdef str block_repr(uint16_t key, Block *self):
 	if self.state == DENSE:
 		return 'D(key=%d, <%d bits set>)' % (key, self.cardinality)
 	elif self.state == POSITIVE:
-		return 'P(key=%d, %r)' % (key, [
-				self.buf.sparse[n] for n in range(self.cardinality)])
+		return 'P(key=%d, crd=%d, cap=%d, %r)' % (
+				key, self.cardinality, self.capacity,
+				[self.buf.sparse[n] for n in range(self.cardinality)])
 	elif self.state == INVERTED:
-		return 'I(key=%d, %r)' % (key, [
-				self.buf.sparse[n] for n in range(
+		return 'I(key=%d, crd=%d, cap=%d, %r)' % (
+				key, self.cardinality, self.capacity,
+				[self.buf.sparse[n] for n in range(
 					BLOCKSIZE - self.cardinality)])
 	else:
-		return '?%d,%d,%d' % (self.state, key, self.cardinality)
-		# raise ValueError
+		raise ValueError('repr: illegal block state=%d, key=%d, crd=%d, cap=%d'
+				% (self.state, key, self.cardinality, self.capacity))
 
 
-cdef inline block_convert(Block *self):
+cdef inline void block_convert(Block *self) nogil:
 	"""Convert between dense, sparse, and inverted sparse as needed."""
 	if self.state == DENSE:
 		if self.cardinality < MAXARRAYLENGTH:
@@ -754,24 +902,25 @@ cdef inline block_convert(Block *self):
 			# To dense bitvector
 			block_todense(self)
 		elif self.cardinality > BLOCKSIZE - MAXARRAYLENGTH:
-			# shouldn't happen.
-			raise ValueError
+			printf("%s", <char *>"convert: positive array too large.")
+			abort()
 	elif self.state == INVERTED:
 		if MAXARRAYLENGTH <= self.cardinality <= BLOCKSIZE - MAXARRAYLENGTH:
 			block_todense(self)
 		elif self.cardinality < MAXARRAYLENGTH:
-			# shouldn't happen.
-			raise ValueError
+			printf("%s", <char *>"convert: inverted array too large.")
+			abort()
 
 
-cdef inline block_todense(Block *self):
-	# To dense bitvector
+cdef inline Buffer block_asdense(Block *self) nogil:
+	# Return dense copy of array in block
 	cdef uint32_t n
 	cdef Buffer buf
 	if self.state == DENSE:
-		return
+		return self.buf  # shouldn't happen
 	buf.dense = allocdense()
 	if self.state == POSITIVE:
+		# FIXME: this can be optimized.
 		memset(buf.dense, 0, BITMAPSIZE)
 		for n in range(self.cardinality):
 			SETBIT(buf.dense, self.buf.sparse[n])
@@ -779,11 +928,17 @@ cdef inline block_todense(Block *self):
 		memset(buf.dense, 255, BITMAPSIZE)
 		for n in range(BLOCKSIZE - self.cardinality):
 			CLEARBIT(buf.dense, self.buf.sparse[n])
+	return buf
+
+
+cdef inline void block_todense(Block *self) nogil:
+	# To dense bitvector; modifies self.
+	cdef Buffer buf = block_asdense(self)
 	self.state = DENSE
 	replacearray(self, buf, BITMAPSIZE // sizeof(uint16_t))
 
 
-cdef inline block_toposarray(Block *self):
+cdef inline void block_toposarray(Block *self) nogil:
 	# To positive sparse array
 	cdef Buffer buf
 	cdef int idx, elem
@@ -798,14 +953,16 @@ cdef inline block_toposarray(Block *self):
 			buf.sparse[n] = elem
 			n += 1
 			elem = iteratesetbits(self.buf.dense, &cur, &idx)
-		assert n == self.cardinality
+		if n != self.cardinality:
+			abort()
 		self.state = POSITIVE
 		replacearray(self, buf, n)
 	elif self.state == INVERTED:
-		raise ValueError("don't do this")
+		printf("%s", <char *>"cannot convert positive to inverted array.")
+		abort()
 
 
-cdef inline block_toinvarray(Block *self):
+cdef inline void block_toinvarray(Block *self) nogil:
 	# To inverted sparse array
 	cdef Buffer buf
 	cdef int idx, elem
@@ -820,38 +977,42 @@ cdef inline block_toinvarray(Block *self):
 			buf.sparse[n] = elem
 			n += 1
 			elem = iterateunsetbits(self.buf.dense, &cur, &idx)
-		assert n == BLOCKSIZE - self.cardinality
+		if n != BLOCKSIZE - self.cardinality:
+			abort()
 		self.state = INVERTED
 		replacearray(self, buf, n)
 	elif self.state == POSITIVE:
-		raise ValueError("don't do this")
+		printf("%s", <char *>"cannot convert inverted to positive array.")
+		abort()
 
 
-cdef inline uint16_t *allocsparse(int length) except NULL:
+cdef inline uint16_t *allocsparse(int length) nogil:
+	# Variable length integer vector
 	cdef Buffer buf
-	buf.sparse = <uint16_t *>malloc(length * sizeof(uint16_t))
+	buf.sparse = <uint16_t *>malloc((length or 1) * sizeof(uint16_t))
 	if buf.sparse is NULL:
-		raise MemoryError
+		abort()
 	return buf.sparse
 
 
-cdef inline uint64_t *allocdense() except NULL:
+cdef inline uint64_t *allocdense() nogil:
+	# Fixed-size, aligned bitmap.
 	# NB: initialization up to caller.
 	cdef Buffer buf
 	buf.ptr = NULL
 	cdef int r = posix_memalign(&buf.ptr, 32, BITMAPSIZE)
 	if r != 0:
-		raise MemoryError
+		abort()
 	return buf.dense
 
 
 cdef inline void replacearray(Block *self, Buffer buf, size_t cap) nogil:
 	free(self.buf.ptr)
-	self.buf = buf
+	self.buf.ptr = buf.ptr
 	self.capacity = cap
 
 
-cdef inline _extendarray(Block *self, int k):
+cdef inline void _extendarray(Block *self, int k) nogil:
 	"""Extend array allocation with k elements + amortization."""
 	cdef int desired, newcapacity, size = self.cardinality
 	if self.state == INVERTED:
@@ -862,48 +1023,52 @@ cdef inline _extendarray(Block *self, int k):
 	newcapacity = 2 * desired if size < 1024 else 5 * desired // 4
 	self.buf.ptr = realloc(self.buf.ptr, newcapacity * sizeof(uint16_t))
 	if self.buf.ptr is NULL:
-		raise MemoryError
+		abort()
 	self.capacity = newcapacity
 
 
-cdef inline _resize(Block *self, int k):
+cdef inline void _resize(Block *self, int k) nogil:
 	"""Reduce array capacity to k+4 if currently larger."""
 	if k * 2 < self.capacity:
 		self.buf.ptr = realloc(self.buf.ptr, (k + 4) * sizeof(uint16_t))
 		if self.buf.ptr is NULL:
-			raise MemoryError
+			abort()
 		self.capacity = k + 4
 
 
-cdef _resizeconvert(Block *self, int state, int alloc):
-	"""Reallocate array of type state and size capacity if neceessary."""
-	cdef Buffer buf
+cdef void _resizeconvert(Block *self, int state, int alloc) nogil:
+	"""(Re)allocate array of type state and size capacity as needed.
+
+	self may be unallocated, but then it must be initialized with zeroes."""
 	if state == DENSE:
-		if self.state != DENSE:
-			buf.dense = allocdense()
-			replacearray(self, buf, BITMAPSIZE // sizeof(uint16_t))
+		if self.state != DENSE or self.buf.ptr is NULL:
+			free(self.buf.ptr)
+			self.buf.dense = allocdense()
+			self.capacity = BITMAPSIZE // sizeof(uint16_t)
 	elif state == POSITIVE:
 		if self.state == DENSE:
-			buf.sparse = allocsparse(alloc)
-			replacearray(self, buf, alloc)
-		elif alloc > self.capacity:
-			self.buf.ptr = realloc(self.buf.ptr, alloc * sizeof(uint16_t))
-			if self.buf.ptr is NULL:
-				raise MemoryError
+			free(self.buf.ptr)
+			self.buf.sparse = allocsparse(alloc)
 			self.capacity = alloc
-	elif state == INVERTED:
-		if self.state == DENSE:
-			buf.sparse = allocsparse(alloc)
-			replacearray(self, buf, alloc)
-		elif alloc > self.capacity:
+		elif alloc > self.capacity or self.buf.ptr is NULL:
 			self.buf.ptr = realloc(self.buf.ptr, alloc * sizeof(uint16_t))
 			if self.buf.ptr is NULL:
-				raise MemoryError
+				abort()
+			self.capacity = alloc
+	else:  # state == INVERTED:
+		if self.state == DENSE:
+			free(self.buf.ptr)
+			self.buf.sparse = allocsparse(alloc)
+			self.capacity = alloc
+		elif alloc > self.capacity or self.buf.ptr is NULL:
+			self.buf.ptr = realloc(self.buf.ptr, alloc * sizeof(uint16_t))
+			if self.buf.ptr is NULL:
+				abort()
 			self.capacity = alloc
 	self.state = state
 
 
-cdef inline _insert(Block *self, int i, uint16_t elem):
+cdef inline void _insert(Block *self, int i, uint16_t elem) nogil:
 	"""Insert element at index i."""
 	cdef int size = self.cardinality
 	if self.state == INVERTED:

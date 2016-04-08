@@ -1,6 +1,7 @@
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t
+from libc.stdio cimport printf
+from libc.stdlib cimport free, malloc, calloc, realloc, abort
 from libc.string cimport memset, memcpy, memcmp, memmove
-from libc.stdlib cimport free, malloc, realloc
 from posix.stdlib cimport posix_memalign
 from cpython cimport array
 cimport cython
@@ -20,10 +21,6 @@ cdef extern from "bitcount.h":
 	unsigned int bit_clz(uint64_t) nogil
 	unsigned int bit_ctz(uint64_t) nogil
 	unsigned int bit_popcount(uint64_t) nogil
-	inline int bitsetintersectinplace(uint64_t *dest, uint64_t *src)
-	inline int bitsetsubtractinplace(uint64_t *dest, uint64_t *src)
-	inline int bitsetunioninplace(uint64_t *dest, uint64_t *src)
-	inline int bitsetxorinplace(uint64_t *dest, uint64_t *src)
 
 
 cdef union Buffer:
@@ -52,6 +49,8 @@ cdef class RoaringBitmap(object):
 
 	cdef int _getindex(self, uint16_t elem)
 	cdef int _binarysearch(self, int begin, int end, uint16_t elem)
+	cdef _tmpalloc(self, int size, uint16_t **keys, Block **data)
+	cdef _replacearrays(self, uint16_t *keys, Block *data, int size)
 	cdef _extendarray(self, int k)
 	cdef _resize(self, int k)
 	cdef _removeatidx(self, int i)
