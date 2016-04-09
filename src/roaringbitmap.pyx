@@ -23,8 +23,6 @@ RoaringBitmap({5, 6, 7, 8, 9})
 """
 # TODOs
 # [ ] use SSE/AVX2 intrinsics
-# [ ] immutable variant: ImmutableRoaringBitmap, in single contiguous block;
-#     enables serialization w/mmap
 # [ ] separate cardinality & binary ops for bitops
 # [ ] check growth strategy of arrays
 # [ ] more operations:
@@ -38,6 +36,59 @@ import sys
 import heapq
 import array
 cimport cython
+
+from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int32_t
+from libc.stdio cimport printf
+from libc.stdlib cimport free, malloc, calloc, realloc, abort
+from libc.string cimport memset, memcpy, memcmp, memmove
+from posix.stdlib cimport posix_memalign
+from cpython cimport array
+cimport cython
+
+cdef extern from *:
+	cdef bint PY2
+
+
+cdef extern from "macros.h":
+	int BITSIZE
+	int BITSLOT(int b) nogil
+	int BITNSLOTS(int nb) nogil
+	void SETBIT(uint64_t a[], int b) nogil
+	void CLEARBIT(uint64_t a[], int b) nogil
+	uint64_t TESTBIT(uint64_t a[], int b) nogil
+	uint64_t BITMASK(int b) nogil
+
+
+cdef extern from "bitcount.h":
+	unsigned int bit_clz(uint64_t) nogil
+	unsigned int bit_ctz(uint64_t) nogil
+	unsigned int bit_popcount(uint64_t) nogil
+
+
+cdef extern from "_arrayops.h":
+	int32_t intersect_uint16(uint16_t *A, size_t lenA,
+			uint16_t *B, size_t lenB, uint16_t *out) nogil
+	int32_t intersect_general16(uint16_t *A, size_t lenA,
+			uint16_t *B, size_t lenB, uint16_t *out) nogil
+
+
+cdef union Buffer:
+	uint16_t *sparse
+	uint64_t *dense
+	void *ptr
+
+
+cdef struct Block:
+	# A set of 2**16 integers, stored as bitmap or array.
+	#
+	# Whether this block contains a bitvector (DENSE); otherwise sparse array;
+	# The array can contain elements corresponding to 0-bits (INVERTED)
+	# or 1-bits (POSITIVE).
+	Buffer buf  # data: sparse array or fixed-size bitvector
+	uint32_t cardinality  # the number of elements
+	uint16_t capacity  # number of allocated uint16_t elements
+	uint8_t state  # either DENSE, INVERTED, or POSITIVE
+
 
 # The maximum number of elements in a block
 DEF BLOCKSIZE = 1 << 16
@@ -59,12 +110,19 @@ DEF INVERTED = 2
 include "bitops.pxi"
 include "arrayops.pxi"
 include "block.pxi"
+include "immutablerb.pxi"
 
-rangegen = xrange if sys.version_info[0] < 3 else range
+rangegen = xrange if PY2 else range
+chararray = array.array(b'B' if PY2 else 'B')
 
 
 cdef class RoaringBitmap(object):
 	"""A compact, mutable set of 32-bit integers."""
+	cdef Block *data  # pointer and size of array/bitmap with elements
+	cdef uint16_t *keys  # the high bits of elements in each block
+	cdef uint32_t size  # the number of blocks
+	cdef uint32_t capacity  # the allocated capacity for blocks
+
 	def __cinit__(self, *args, **kwargs):
 		self.keys = <uint16_t *>malloc(INITCAPACITY * sizeof(uint16_t))
 		self.data = <Block *>malloc(INITCAPACITY * sizeof(Block))
@@ -367,8 +425,7 @@ cdef class RoaringBitmap(object):
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
 						break
-			if result.data[result.size].buf.ptr is not NULL:
-				free(result.data[result.size].buf.ptr)
+			free(result.data[result.size].buf.ptr)
 			result._resize(result.size)
 		return result
 
@@ -502,41 +559,8 @@ cdef class RoaringBitmap(object):
 			result += self.data[n].cardinality
 		return result
 
-	def __richcmp__(x, y, op):
-		cdef RoaringBitmap ob1, ob2
-		cdef int n
-		if op == 2:  # ==
-			if not isinstance(x, RoaringBitmap):
-				# FIXME: what is best approach here?
-				# cost of constructing RoaringBitmap vs loss of sort with set()
-				# if non-RoaringBitmap is small, constructing new one is better
-				return RoaringBitmap(x) == y if len(x) < 1024 else x == set(y)
-			elif not isinstance(y, RoaringBitmap):
-				return x == RoaringBitmap(y) if len(y) < 1024 else set(x) == y
-			ob1, ob2 = x, y
-			if ob1.size != ob2.size:
-				return False
-			if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
-				return False
-			for n in range(ob1.size):
-				if ob1.data[n].cardinality != ob2.data[n].cardinality:
-					return False
-			for n in range(ob1.size):
-				if memcmp(ob1.data[n].buf.sparse, ob2.data[n].buf.sparse,
-						_getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
-					return False
-			return True
-		elif op == 3:  # !=
-			return not (x == y)
-		elif op == 1:  # <=
-			return ensurerb(x).issubset(y)
-		elif op == 5:  # >=
-			return ensurerb(x).issuperset(y)
-		elif op == 0:  # <
-			return len(x) < len(y) and ensurerb(x).issubset(y)
-		elif op == 4:  # >
-			return len(x) > len(y) and ensurerb(x).issuperset(y)
-		return NotImplemented
+	def __richcmp__(x, y, int op):
+		return richcmp(x, y, op)
 
 	def __iter__(self):
 		cdef RoaringBitmap ob = ensurerb(self)
@@ -633,46 +657,60 @@ cdef class RoaringBitmap(object):
 
 	def __getstate__(self):
 		cdef array.array state
-		cdef Block ob
-		cdef uint32_t indexlen = self.size
-		cdef size_t size, offset = sizeof(uint32_t), alloc
-		cdef int n
-		state = array.array('B' if sys.version_info[0] >= 3 else b'B')
-		array.resize(state, sizeof(uint32_t)
-				+ self.size * sizeof(uint16_t) + self.size * sizeof(Block))
-		(<uint32_t *>state.data.as_chars)[0] = indexlen
-		memcpy(&(state.data.as_chars[offset]), self.keys,
-				self.size * sizeof(uint16_t))
-		offset += indexlen * sizeof(uint16_t)
-		alloc = offset + indexlen * sizeof(Block)
+		cdef Block *ob
+		cdef uint32_t extra, alignment = 32
+		cdef size_t n, size
+		cdef size_t alloc  # total allocated bytes for pickle
+		cdef size_t offset1 = sizeof(uint32_t)  # keys, data
+		cdef size_t offset2  # buffers
+		# compute total size to allocate
+		# add padding to ensure bitmaps are 32-byte aligned
+		alloc = offset1 + self.size * (sizeof(uint16_t) + sizeof(Block))
+		alloc += alignment - alloc % alignment
 		for n in range(self.size):
-			ob = self.data[n]
-			ob.capacity = _getsize(&ob)
-			ob.buf.ptr = <void *>alloc
-			alloc += ob.capacity * sizeof(uint16_t)
-			(<Block *>&(state.data.as_chars[offset]))[0] = ob
-			offset += sizeof(Block)
-		array.resize(state, offset + alloc)
+			alloc += _getsize(&(self.data[n])) * sizeof(uint16_t)
+			alloc += alignment - alloc % alignment
+		state = array.clone(chararray, alloc, False)
+		(<uint32_t *>state.data.as_chars)[0] = self.size
+		size = self.size * sizeof(uint16_t)
+		memcpy(&(state.data.as_chars[offset1]), self.keys, size)
+		offset1 += size
+		offset2 = offset1 + self.size * sizeof(Block)
+		# add zero padding bytes
+		extra = alignment - offset2 % alignment
+		memset(&(state.data.as_chars[offset2]), 0, extra)
+		offset2 += extra
 		for n in range(self.size):
-			size = _getsize(&(self.data[n])) * sizeof(uint16_t)
-			memcpy(&(state.data.as_chars[offset]), self.data[n].buf.ptr, size)
-			offset += size
+			# copy block
+			ob = (<Block *>&(state.data.as_chars[offset1]))
+			ob[0] = self.data[n]
+			ob.capacity = _getsize(&(self.data[n]))
+			ob.buf.ptr = <void *>offset2
+			offset1 += sizeof(Block)
+			# copy buffer of block
+			size = ob.capacity * sizeof(uint16_t)
+			memcpy(&(state.data.as_chars[offset2]), self.data[n].buf.ptr, size)
+			offset2 += size
+			# add zero padding bytes
+			extra = alignment - offset2 % alignment
+			memset(&(state.data.as_chars[offset2]), 0, extra)
+			offset2 += extra
 		return state
 
 	def __setstate__(self, array.array state):
 		cdef char *buf = state.data.as_chars
 		cdef Block *data
 		cdef size_t size, offset = sizeof(uint32_t)
-		cdef uint32_t indexlen = (<uint32_t *>buf)[0]
 		cdef int n
 		self.clear()
-		self.keys = <uint16_t *>realloc(self.keys, indexlen * sizeof(uint16_t))
-		self.data = <Block *>realloc(self.data, indexlen * sizeof(Block))
+		self.size = (<uint32_t *>buf)[0]
+		self.keys = <uint16_t *>realloc(self.keys, self.size * sizeof(uint16_t))
+		self.data = <Block *>realloc(self.data, self.size * sizeof(Block))
 		if self.keys is NULL or self.data is NULL:
-			raise MemoryError(indexlen)
-		self.capacity = self.size = indexlen
-		memcpy(self.keys, &(buf[offset]), indexlen * sizeof(uint16_t))
-		offset += indexlen * sizeof(uint16_t)
+			raise MemoryError(self.size)
+		self.capacity = self.size = self.size
+		memcpy(self.keys, &(buf[offset]), self.size * sizeof(uint16_t))
+		offset += self.size * sizeof(uint16_t)
 		data = <Block *>&(buf[offset])
 		for n in range(self.size):
 			self.data[n] = data[n]
@@ -711,6 +749,13 @@ cdef class RoaringBitmap(object):
 		result._extendarray(self.size)
 		for n in range(self.size):
 			result._insertcopy(result.size, self.keys[n], &(self.data[n]))
+		return result
+
+	def freeze(self):
+		"""Return an immutable copy of this RoaringBitmap."""
+		cdef ImmutableRoaringBitmap result = ImmutableRoaringBitmap.__new__(
+				ImmutableRoaringBitmap)
+		result.__setstate__(self.__getstate__())
 		return result
 
 	def isdisjoint(self, other):
@@ -755,31 +800,42 @@ cdef class RoaringBitmap(object):
 		"""Return the intersection of two or more sets as a new RoaringBitmap.
 
 		(i.e. elements that are common to all of the sets.)"""
-		cdef RoaringBitmap ob
 		if len(other) == 1:
 			return self & other[0]
-		ob = self.copy()
-		ob.intersection_update(other)
-		return ob
+		other = list(other)
+		other.append(self)
+		other.sort(key=RoaringBitmap.__sizeof__)
+		result = other[0] & other[1]
+		for ob in other[2:]:
+			result &= ob
+		return result
 
 	def union(self, *other):
 		"""Return the union of two or more sets as a new set.
 
 		(i.e. all elements that are in at least one of the sets.)"""
-		cdef RoaringBitmap ob
 		if len(other) == 1:
 			return self | other[0]
-		ob = self.copy()
-		ob.update(other)
-		return ob
+		queue = [(ob1.__sizeof__(), ob1) for ob1 in other]
+		queue.append((self.__sizeof__(), self))
+		heapq.heapify(queue)
+		while len(queue) > 1:
+			_, ob1 = heapq.heappop(queue)
+			_, ob2 = heapq.heappop(queue)
+			result = ob1 | ob2
+			heapq.heappush(queue, (result.__sizeof__(), result))
+		_, result = heapq.heappop(queue)
+		return result
 
 	def difference(self, *other):
 		"""Return the difference of two or more sets as a new RoaringBitmap.
 
 		(i.e, self - other[0] - other[1] - ...)"""
 		cdef RoaringBitmap bitmap
-		cdef RoaringBitmap ob = self.copy()
-		for bitmap in other:
+		cdef RoaringBitmap ob
+		other = sorted(other, key=RoaringBitmap.__sizeof__, reverse=True)
+		ob = self - other[0]
+		for bitmap in other[1:]:
 			ob -= bitmap
 		return ob
 
@@ -1053,8 +1109,7 @@ cdef class RoaringBitmap(object):
 					block = &(self.data[i])
 				else:
 					block = self._insertempty(-i - 1, key, False)
-					block.cardinality = 0
-					block.capacity = 0
+					block.cardinality = block.capacity = 0
 				prev = key
 			block.cardinality += 1
 		# allocate blocks
@@ -1064,7 +1119,7 @@ cdef class RoaringBitmap(object):
 				block.capacity = block.cardinality
 				block.buf.sparse = allocsparse(block.capacity)
 				block.state = POSITIVE
-			else:
+			else:  # if necessary, will convert to inverted later
 				block.capacity = BITMAPSIZE // sizeof(uint16_t)
 				block.buf.dense = allocdense()
 				memset(block.buf.dense, 0, BITMAPSIZE)
@@ -1089,7 +1144,7 @@ cdef class RoaringBitmap(object):
 		cdef uint32_t elem
 		cdef uint16_t key
 		cdef int i, prev = -1
-		for elem in iterable:  # if alreadysorted else sorted(iterable):
+		for elem in iterable:
 			key = highbits(elem)
 			if key != prev:
 				i = self._getindex(key)
@@ -1156,7 +1211,10 @@ cdef class RoaringBitmap(object):
 		self.size -= 1
 
 	cdef Block *_insertempty(self, int i, uint16_t key, bint moveblocks):
-		"""Insert a new, uninitialized block."""
+		"""Insert a new, uninitialized block.
+
+		:param moveblocks: if False, assume self.data array is uninitialized
+			and data does not have to be moved."""
 		self._extendarray(1)
 		if i < self.size:
 			memmove(&(self.keys[i + 1]), &(self.keys[i]),
@@ -1177,17 +1235,15 @@ cdef class RoaringBitmap(object):
 					(self.size - i) * sizeof(uint16_t))
 			memmove(&(self.data[i + 1]), &(self.data[i]),
 					(self.size - i) * sizeof(Block))
-		if block is not NULL:
-			size = _getsize(block)
-			self.keys[i] = key
-			self.data[i] = block[0]
-			if self.data[i].state == DENSE:
-				self.data[i].buf.dense = allocdense()
-			elif self.data[i].state in (POSITIVE, INVERTED):
-				self.data[i].buf.sparse = allocsparse(size)
-				self.data[i].capacity = size
-			memcpy(self.data[i].buf.ptr, block.buf.ptr,
-					size * sizeof(uint16_t))
+		size = _getsize(block)
+		self.keys[i] = key
+		self.data[i] = block[0]
+		if self.data[i].state == DENSE:
+			self.data[i].buf.dense = allocdense()
+		elif self.data[i].state in (POSITIVE, INVERTED):
+			self.data[i].buf.sparse = allocsparse(size)
+			self.data[i].capacity = size
+		memcpy(self.data[i].buf.ptr, block.buf.ptr, size * sizeof(uint16_t))
 		self.size += 1
 
 	cdef int _getindex(self, uint16_t key):
@@ -1231,7 +1287,44 @@ cdef class RoaringBitmap(object):
 							n].buf.sparse[m + 1]
 
 
-cdef RoaringBitmap ensurerb(obj):
+cdef inline richcmp(x, y, int op):
+	cdef RoaringBitmap ob1, ob2
+	cdef int n
+	if op == 2:  # ==
+		if not isinstance(x, RoaringBitmap):
+			# FIXME: what is best approach here?
+			# cost of constructing RoaringBitmap vs loss of sort with set()
+			# if non-RoaringBitmap is small, constructing new one is better
+			return RoaringBitmap(x) == y if len(x) < 1024 else x == set(y)
+		elif not isinstance(y, RoaringBitmap):
+			return x == RoaringBitmap(y) if len(y) < 1024 else set(x) == y
+		ob1, ob2 = x, y
+		if ob1.size != ob2.size:
+			return False
+		if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
+			return False
+		for n in range(ob1.size):
+			if ob1.data[n].cardinality != ob2.data[n].cardinality:
+				return False
+		for n in range(ob1.size):
+			if memcmp(ob1.data[n].buf.sparse, ob2.data[n].buf.sparse,
+					_getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
+				return False
+		return True
+	elif op == 3:  # !=
+		return not (x == y)
+	elif op == 1:  # <=
+		return ensurerb(x).issubset(y)
+	elif op == 5:  # >=
+		return ensurerb(x).issuperset(y)
+	elif op == 0:  # <
+		return len(x) < len(y) and ensurerb(x).issubset(y)
+	elif op == 4:  # >
+		return len(x) > len(y) and ensurerb(x).issuperset(y)
+	return NotImplemented
+
+
+cdef inline RoaringBitmap ensurerb(obj):
 	"""Convert set-like ``obj`` to RoaringBitmap if necessary."""
 	if isinstance(obj, RoaringBitmap):
 		return obj

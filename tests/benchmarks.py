@@ -1,6 +1,6 @@
 """Benchmarks for roaringbitmap"""
 from __future__ import division, print_function, absolute_import, \
-	 unicode_literals
+		unicode_literals
 import random
 import timeit
 
@@ -209,22 +209,22 @@ def bench_jaccard():
 def main():
 	global N, MAX, DATA1, DATA2
 	for x in range(3):
-		if x == 0:
+		if x == 0:  # benchmark positive blocks
 			print('small sparse set')
-			N = 200
-			MAX = 40000
-		elif x == 1:
+			N = 200  # number of random elements
+			MAX = 40000  # range of elements
+		elif x == 1:  # benchmark bitmap blocks
 			print('medium load factor')
 			N = 59392
 			MAX = 118784
-		elif x == 2:
-			print('large sparse set')
-			N = 1 << 17  # number of random elements
-			MAX = 1 << 31
-		elif x == 3:
+		elif x == 2:  # benchmark inverted blocks
 			print('dense set / high load factor')
 			N = 40000 - 200
 			MAX = 40000
+		elif x == 3:  # benchmark large number of small blocks
+			print('large sparse set')  # don't use RoaringBitmap for this case
+			N = 1 << 12
+			MAX = 1 << 31
 		DATA1, DATA2 = pair()
 
 		fmt = '%12s %8s %16s %8s'

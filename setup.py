@@ -4,6 +4,7 @@ import sys
 from distutils.core import setup
 from distutils.extension import Extension
 
+PY2 = sys.version_info[0] == 2
 USE_CYTHON = '--with-cython' in sys.argv or not os.path.exists(
 		'src/roaringbitmap.c')
 if USE_CYTHON:
@@ -65,15 +66,16 @@ if __name__ == '__main__':
 	if sys.version_info[:2] < (2, 7) or (3, 0) <= sys.version_info[:2] < (3, 3):
 		raise RuntimeError('Python version 2.7 or >= 3.3 required.')
 	os.environ['GCC_COLORS'] = 'auto'
-	extra_compile_args = ['-O3', '-march=native', '-DNDEBUG',
+	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
 			'-Wno-strict-prototypes']
-	extra_link_args = ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
 			directives.update(wraparound=True, boundscheck=True)
-			extra_compile_args = ['-g', '-O0',
-					'-Wno-strict-prototypes', '-Wno-unused-function']
+			extra_compile_args += ['-g', '-O0']
 			extra_link_args = ['-g']
+		else:
+			extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
+			extra_link_args = ['-DNDEBUG']
 		ext_modules = cythonize(
 				[Extension(
 					'*',

@@ -1,11 +1,12 @@
-# Set / search operations on arrays
+# Set / search operations on integer arrays
 
 cdef inline int binarysearch(uint16_t *data, int begin, int end,
 		uint16_t elem) nogil:
 	"""Binary search for short `elem` in array `data`.
 
-	:returns: positive index ``i`` if ``elem`` is found; negative value ``i``
-		if ``elem`` is not found, but would fit at ``-i - 1``."""
+	:returns: positive index ``i`` if ``elem`` is found; otherwise return a
+		negative value ``i`` such that ``-i - 1`` is the index where ``elem``
+		should be inserted."""
 	cdef int low = begin
 	cdef int high = end - 1
 	cdef int middleidx
@@ -57,11 +58,17 @@ cdef uint32_t intersect2by2(uint16_t *data1, uint16_t *data2,
 		return intersectgalloping(data1, length1, data2, length2, dest)
 	elif length2 * 64 < length1:
 		return intersectgalloping(data2, length2, data1, length1, dest)
-	return intersectlocal2by2(data1, data2, length1, length2, dest)
+	if dest is NULL:
+		return intersectcard(data1, data2, length1, length2)
+	# elif data1 is not dest and data2 is not dest:
+	# 	# NB: dest must have 8 elements extra capacity
+	# 	return intersect_uint16(data1, length1, data2, length2, dest)
+	return intersect_general16(data1, length1, data2, length2, dest)
+	# return intersectlocal2by2(data1, length1, data2, length2, dest)
 
 
-cdef inline int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest) nogil:
+cdef inline int intersectlocal2by2(uint16_t *data1, int length1,
+		uint16_t *data2, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if length1 == 0 or length2 == 0:
 		return 0
@@ -81,8 +88,37 @@ cdef inline int intersectlocal2by2(uint16_t *data1, uint16_t *data2,
 				elif data1[k1] >= data2[k2]:
 					break
 		else:  # data1[k1] == data2[k2]
-			if dest is not NULL:
-				dest[pos] = data1[k1]
+			dest[pos] = data1[k1]
+			pos += 1
+			k1 += 1
+			if k1 == length1:
+				return pos
+			k2 += 1
+			if k2 == length2:
+				return pos
+
+
+cdef inline int intersectcard(uint16_t *data1, uint16_t *data2,
+		int length1, int length2) nogil:
+	cdef int k1 = 0, k2 = 0, pos = 0
+	if length1 == 0 or length2 == 0:
+		return 0
+	while True:
+		if data2[k2] < data1[k1]:
+			while True:
+				k2 += 1
+				if k2 == length2:
+					return pos
+				elif data2[k2] >= data1[k1]:
+					break
+		elif data1[k1] < data2[k2]:
+			while True:
+				k1 += 1
+				if k1 == length1:
+					return pos
+				elif data1[k1] >= data2[k2]:
+					break
+		else:  # data1[k1] == data2[k2]
 			pos += 1
 			k1 += 1
 			if k1 == length1:
