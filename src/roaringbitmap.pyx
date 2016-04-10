@@ -2,17 +2,17 @@
 
 A Roaring bitmap stores a set of 32 bit integers compactly while allowing for
 efficient set operations. The space of integers is partitioned into blocks
-of 2 ** 16 integers. Depending on the number of elements each block contains,
-it is stored as either:
+of ``2 ** 16`` integers. The representation for a block depends on the number
+of elements it contains:
 
 <= 4096 elements:
-	an array of up to 1 << 12 shorts part of the set.
+	an array of up to ``1 << 12`` 16-bit integers that are part of the set.
 
 >= 61140 elements:
-	an array of up to 1 << 12 shorts not part of the set.
+	an array of up to ``1 << 12`` 16-bit integers that are not part of the set.
 
 otherwise:
-	a fixed bitmap of 1 << 16 (65536) bits with a 1-bit for each element.
+	a fixed bitmap of ``1 << 16`` (65536) bits with a 1-bit for each element.
 
 A ``RoaringBitmap`` can be used as a replacement for a mutable
 Python ``set`` containing unsigned 32-bit integers:
@@ -937,6 +937,9 @@ cdef class RoaringBitmap(object):
 		return result
 
 	def union_len(self, other):
+		"""Return the cardinality of the union.
+
+		Optimized version of ``len(self | other)``."""
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
 		cdef uint32_t result = 0
