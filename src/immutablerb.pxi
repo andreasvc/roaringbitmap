@@ -75,8 +75,16 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 			return not (x == y)
 		return richcmp(x, y, op)
 
+	def __sizeof__(self):
+		"""Return memory usage in bytes."""
+		return len(self.state)
+
+	def freeze(self):
+		"""Already immutable, return self."""
+		return self
+
 	def __repr__(self):
-		return 'ImmutableRoaringBitmap({%s})' % ', '.join(str(a) for a in self)
+		return 'ImmutableRoaringBitmap(%s)' % str(self)
 
 	def copy(self):
 		"""Return a copy of this RoaringBitmap."""

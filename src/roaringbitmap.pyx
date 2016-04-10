@@ -26,7 +26,7 @@ RoaringBitmap({5, 6, 7, 8, 9})
 # [ ] separate cardinality & binary ops for bitops
 # [ ] check growth strategy of arrays
 # [ ] more operations:
-#     [ ] shifts
+#     [ ] effcient shifts
 #     [ ] operate on slices without instantiating range as temp object
 # [ ] subclass Set ABC?
 # [ ] error checking, robustness
@@ -553,6 +553,37 @@ cdef class RoaringBitmap(object):
 		result._resize(result.size)
 		return result
 
+	def __lshift__(self, other):
+		return self.__rshift__(-other)
+
+	def __rshift__(self, other):
+		# FIXME: replace with optimized implementation
+		return RoaringBitmap(elem + other for elem in self
+				if 0 <= elem + other < 1 << 32)
+
+	# def __ilshift__(self, other):
+	# 	raise NotImplementedError
+
+	# def __irshift__(self, other):
+	# 	raise NotImplementedError
+
+	def __invert__(self):
+		"""Return copy with smallest to largest elements inverted."""
+		return self.symmetric_difference(
+				rangegen(self.min(), self.max() + 1))
+
+	def min(self):
+		"""Return smallest element in this RoaringBitmap.
+
+		NB: faster than min(self) which iterates over all elements."""
+		return self.select(0)
+
+	def max(self):
+		"""Return largest element in this RoaringBitmap.
+
+		NB: faster than max(self) which iterates over all elements."""
+		return next(reversed(self))
+
 	def __len__(self):
 		cdef int result = 0, n
 		for n in range(self.size):
@@ -636,17 +667,13 @@ cdef class RoaringBitmap(object):
 					yield high | low
 
 	def __bool__(self):
-		cdef int n
-		for n in range(self.size):
-			if self.data[n].cardinality > 0:
-				return True
-		return False
+		return <bint>self.size
 
 	def __str__(self):
 		return '{%s}' % ', '.join(str(a) for a in self)
 
 	def __repr__(self):
-		return 'RoaringBitmap({%s})' % ', '.join(str(a) for a in self)
+		return 'RoaringBitmap(%s)' % str(self)
 
 	def debuginfo(self):
 		"""Return a string with the internal representation of this bitmap."""
@@ -724,10 +751,19 @@ cdef class RoaringBitmap(object):
 			memcpy(self.data[n].buf.ptr, &(buf[offset]), size)
 
 	def __sizeof__(self):
-		"""Return memory usage in bytes."""
-		return sum([sizeof(uint16_t) + sizeof(Block)
-				+ self.data[n].capacity * sizeof(uint16_t)
-				for n in range(self.size)])
+		"""Return memory usage in bytes (incl. overallocation)."""
+		cdef uint32_t result = 0
+		for n in range(self.size):
+			result += (sizeof(uint16_t) + sizeof(Block)
+					+ self.data[n].capacity * sizeof(uint16_t))
+		return result
+
+	def numelem(self):
+		"""Return total number of uint16_t elements stored."""
+		cdef uint32_t result = 0
+		for n in range(self.size):
+			result += 1 + _getsize(&(self.data[n]))
+		return result
 
 	def clear(self):
 		"""Remove all elements from this RoaringBitmap."""
@@ -804,7 +840,7 @@ cdef class RoaringBitmap(object):
 			return self & other[0]
 		other = list(other)
 		other.append(self)
-		other.sort(key=RoaringBitmap.__sizeof__)
+		other.sort(key=RoaringBitmap.numelem)
 		result = other[0] & other[1]
 		for ob in other[2:]:
 			result &= ob
@@ -816,14 +852,14 @@ cdef class RoaringBitmap(object):
 		(i.e. all elements that are in at least one of the sets.)"""
 		if len(other) == 1:
 			return self | other[0]
-		queue = [(ob1.__sizeof__(), ob1) for ob1 in other]
-		queue.append((self.__sizeof__(), self))
+		queue = [(ob1.numelem(), ob1) for ob1 in other]
+		queue.append((self.numelem(), self))
 		heapq.heapify(queue)
 		while len(queue) > 1:
 			_, ob1 = heapq.heappop(queue)
 			_, ob2 = heapq.heappop(queue)
 			result = ob1 | ob2
-			heapq.heappush(queue, (result.__sizeof__(), result))
+			heapq.heappush(queue, (result.numelem(), result))
 		_, result = heapq.heappop(queue)
 		return result
 
@@ -833,7 +869,7 @@ cdef class RoaringBitmap(object):
 		(i.e, self - other[0] - other[1] - ...)"""
 		cdef RoaringBitmap bitmap
 		cdef RoaringBitmap ob
-		other = sorted(other, key=RoaringBitmap.__sizeof__, reverse=True)
+		other = sorted(other, key=RoaringBitmap.numelem, reverse=True)
 		ob = self - other[0]
 		for bitmap in other[1:]:
 			ob -= bitmap
@@ -865,13 +901,13 @@ cdef class RoaringBitmap(object):
 		if len(bitmaps) == 1:
 			self |= bitmaps[0]
 			return
-		queue = [(bitmap1.__sizeof__(), bitmap1) for bitmap1 in bitmaps]
+		queue = [(bitmap1.numelem(), bitmap1) for bitmap1 in bitmaps]
 		heapq.heapify(queue)
 		while len(queue) > 1:
 			_, bitmap1 = heapq.heappop(queue)
 			_, bitmap2 = heapq.heappop(queue)
 			result = bitmap1 | bitmap2
-			heapq.heappush(queue, (result.__sizeof__(), result))
+			heapq.heappush(queue, (result.numelem(), result))
 		_, result = heapq.heappop(queue)
 		self |= result
 
@@ -893,7 +929,7 @@ cdef class RoaringBitmap(object):
 		elif len(bitmaps) == 1:
 			self &= bitmaps[0]
 			return
-		bitmaps = sorted(bitmaps, key=RoaringBitmap.__sizeof__)
+		bitmaps = sorted(bitmaps, key=RoaringBitmap.numelem)
 		for bitmap in bitmaps:
 			self &= bitmap
 
@@ -1028,6 +1064,9 @@ cdef class RoaringBitmap(object):
 		:param i: a 0-based index."""
 		cdef int leftover = i, n
 		cdef uint32_t keycontrib, lowcontrib
+		if i < 0:
+			raise IndexError('select: index %d out of range 0..%d.' % (
+					i, len(self)))
 		for n in range(self.size):
 			if self.data[n].cardinality > leftover:
 				keycontrib = self.keys[n] << 16
@@ -1048,38 +1087,49 @@ cdef class RoaringBitmap(object):
 			return len(self) - i
 		return i
 
+	def _slice(self, i):
+		# handle negative indices, step
+		start = 0 if i.start is None else self._ridx(i.start)
+		stop = len(self) if i.stop is None else self._ridx(i.stop)
+		return rangegen(
+				self.select(start), self.select(stop - 1) + 1,
+				1 if i.step is None else i.step)
+
 	def __getitem__(self, i):
-		"""Get element with rank `i`."""
+		"""Get element with rank `i`, or a slice.
+
+		In the case of a slice, a new roaringbitmap is returned."""
 		if isinstance(i, slice):
-			# negative indices, step
-			return self.intersection(
-					range(self.select(self._ridx(i.start)),
-						self.select(self._ridx(i.stop) - 1) + 1), i.step)
-		if i < 0:
-			i = len(self) - i
-		return self.select(i)
+			return self.intersection(self._slice(i))
+		elif isinstance(i, int):
+			return self._ridx(i)
+		else:
+			raise TypeError('Expected integer index or slice object.')
 
 	def __delitem__(self, i):
-		"""Discard element with rank `i`."""
+		"""Discard element with rank `i`, or a slice."""
 		if isinstance(i, slice):
-			self.difference_update(
-					range(self.select(self._ridx(i.start)),
-						self.select(self._ridx(i.stop) - 1) + 1), i.step)
-		if i < 0:
-			i = len(self) - i
-		self.discard(self.select(i))
+			self.difference_update(self._slice(i))
+		elif isinstance(i, int):
+			self.discard(self.select(self._ridx(i)))
+		else:
+			raise TypeError('Expected integer index or slice object.')
 
 	def __setitem__(self, i, x):
-		"""Set element with rank `i` to False."""
-		if not bool(x):
-			self.__delitem__(i)
+		"""Set element with rank `i` to ``False``.
+
+		Alternatively, set all elements within a range of ranks to
+		``True`` or ``False``."""
 		if isinstance(i, slice):
-			self.update(
-					range(self.select(self._ridx(i.start)),
-						self.select(self._ridx(i.stop) - 1) + 1), i.step)
-		raise NotImplementedError('use RoaringBitmap.add(x) to add an '
-				'element; The ith element is by definition '
-				'already in the set.')
+			self.update(self._slice(i))
+		elif isinstance(i, int):
+			if bool(x):
+				raise NotImplementedError('use RoaringBitmap.add(x) to add an '
+						'element; The ith element is by definition '
+						'already in the set.')
+			self.__delitem__(self._ridx(i))
+		else:
+			raise TypeError('Expected integer index or slice object.')
 
 	def _initrange(self, uint32_t start, uint32_t stop):
 		cdef Block *block = NULL
