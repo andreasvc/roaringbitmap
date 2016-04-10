@@ -111,6 +111,7 @@ include "bitops.pxi"
 include "arrayops.pxi"
 include "block.pxi"
 include "immutablerb.pxi"
+include "multirb.pxi"
 
 rangegen = xrange if PY2 else range
 chararray = array.array(b'B' if PY2 else 'B')

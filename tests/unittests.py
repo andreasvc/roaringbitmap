@@ -16,7 +16,8 @@ except ImportError:
 	pass
 if sys.version_info[0] < 3:
 	range = xrange
-from roaringbitmap import RoaringBitmap, ImmutableRoaringBitmap
+from roaringbitmap import RoaringBitmap, ImmutableRoaringBitmap, \
+		MultiRoaringBitmap
 
 # (numitems, maxnum)
 PARAMS = [
@@ -46,6 +47,44 @@ def pair():
 						for _ in range(elements // 2))
 				result.append((a, b))
 	return result
+
+
+@pytest.fixture(scope='module')
+def multi():
+	result = [[random.randint(0, 1000)
+			for _ in range(random.randint(100, 2000))]
+			for _ in range(100)]
+	return result
+
+
+class Test_multirb(object):
+	def test_init(self, multi):
+		orig = [RoaringBitmap(a) for a in multi]
+		mrb = MultiRoaringBitmap(orig)
+		assert len(orig) == len(mrb)
+		for rb1, rb2 in zip(orig, mrb):
+			assert rb1 == rb2
+
+	def test_aggregateand(self, multi):
+		ref = set(multi[0])
+		res1 = ref.intersection(*[set(a) for a in multi[1:]])
+		mrb = MultiRoaringBitmap([ImmutableRoaringBitmap(a) for a in multi])
+		res2 = mrb.intersection(list(range(len(mrb))))
+		res2._checkconsistency()
+		assert res1 == res2
+
+	def test_pickle(self, multi):
+		orig = [RoaringBitmap(a) for a in multi]
+		mrb = MultiRoaringBitmap(orig)
+		mrb_pickled = pickle.dumps(mrb, protocol=-1)
+		mrb_unpickled = pickle.loads(mrb_pickled)
+		assert len(orig) == len(mrb)
+		assert len(orig) == len(mrb_unpickled)
+		for rb1, rb2, rb3 in zip(orig, mrb, mrb_unpickled):
+			assert rb1 == rb2
+			assert rb1 == rb3
+			rb3._checkconsistency()
+			assert type(rb3) == ImmutableRoaringBitmap
 
 
 class Test_immutablerb(object):
@@ -121,23 +160,19 @@ class Test_immutablerb(object):
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert ref - ref2 == set(rb - rb2)
 
-	def test_aggregateand(self):
-		data = [[random.randint(0, 1000) for _ in range(2000)]
-				for _ in range(10)]
-		ref = set(data[0])
-		res1 = ref.intersection(*[set(a) for a in data[1:]])
-		rb = ImmutableRoaringBitmap(data[0])
-		res2 = rb.intersection(*[ImmutableRoaringBitmap(a) for a in data[1:]])
+	def test_aggregateand(self, multi):
+		ref = set(multi[0])
+		res1 = ref.intersection(*[set(a) for a in multi[1:]])
+		rb = ImmutableRoaringBitmap(multi[0])
+		res2 = rb.intersection(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
 		assert res1 == res2
 
-	def test_aggregateor(self):
-		data = [[random.randint(0, 1000) for _ in range(2000)]
-				for _ in range(10)]
-		ref = set(data[0])
-		res1 = ref.union(*[set(a) for a in data[1:]])
-		rb = ImmutableRoaringBitmap(data[0])
-		res2 = rb.union(*[ImmutableRoaringBitmap(a) for a in data[1:]])
+	def test_aggregateor(self, multi):
+		ref = set(multi[0])
+		res1 = ref.union(*[set(a) for a in multi[1:]])
+		rb = ImmutableRoaringBitmap(multi[0])
+		res2 = rb.union(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
 		assert res1 == res2
 
@@ -410,23 +445,19 @@ class Test_roaringbitmap(object):
 			refans2 = ref.isdisjoint(ref3)
 			assert rb.isdisjoint(rb3) == refans2
 
-	def test_aggregateand(self):
-		data = [[random.randint(0, 1000) for _ in range(2000)]
-				for _ in range(10)]
-		ref = set(data[0])
-		ref.intersection_update(*[set(a) for a in data[1:]])
-		rb = RoaringBitmap(data[0])
-		rb.intersection_update(*[RoaringBitmap(a) for a in data[1:]])
+	def test_aggregateand(self, multi):
+		ref = set(multi[0])
+		ref.intersection_update(*[set(a) for a in multi[1:]])
+		rb = RoaringBitmap(multi[0])
+		rb.intersection_update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
 		assert rb == ref
 
-	def test_aggregateor(self):
-		data = [[random.randint(0, 1000) for _ in range(2000)]
-				for _ in range(10)]
-		ref = set(data[0])
-		ref.update(*[set(a) for a in data[1:]])
-		rb = RoaringBitmap(data[0])
-		rb.update(*[RoaringBitmap(a) for a in data[1:]])
+	def test_aggregateor(self, multi):
+		ref = set(multi[0])
+		ref.update(*[set(a) for a in multi[1:]])
+		rb = RoaringBitmap(multi[0])
+		rb.update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
 		assert rb == ref
 

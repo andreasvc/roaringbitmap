@@ -4,7 +4,9 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 	Any operation resulting in a new roaring bitmap is returned as a mutable
 	RoaringBitmap. Stores data in one contiguous block of memory for efficient
 	serialization."""
-	cdef readonly array.array state
+	cdef readonly object state  # object to be kept for ptr to remain valid
+	cdef char *ptr  # the data
+	cdef size_t bufsize  # length in bytes of data
 	cdef long _hash
 
 	def __init__(self, iterable=None):
@@ -39,38 +41,49 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		Instead of copying this data, it will be used directly.
 		"""
 		# NB: for mmap, must avoid array/pickle.
-		# FIXME: 32 byte alignment depends on state.data being aligned.
 		self.state = state
-		self._hash = hashbytes(state.data.as_chars, len(state))
-		self.size = (<uint32_t *>state.data.as_ulongs)[0]
+		# FIXME: 32 byte alignment depends on state.data being aligned.
+		self._setptr(state.data.as_chars, len(state))
+
+	cdef _setptr(self, char *ptr, size_t size):
+		cdef int n
+		self.ptr = ptr
+		self.bufsize = size
+		self._hash = -1
+		self.size = (<uint32_t *>ptr)[0]
 		self.capacity = self.size
-		self.keys = <uint16_t *>&(state.data.as_chars[sizeof(uint32_t)])
+		self.keys = <uint16_t *>&(ptr[sizeof(uint32_t)])
 		# adjust pointers in advance:
-		self.data = <Block *>malloc(self.size * sizeof(Block))
+		self.data = <Block *>realloc(self.data, self.size * sizeof(Block))
 		for n in range(self.size):
-			self.data[n] = (<Block *>&(state.data.as_chars[
+			self.data[n] = (<Block *>&(ptr[
 				sizeof(uint32_t) + self.size * sizeof(uint16_t)
 				+ n * sizeof(Block)]))[0]
 			self.data[n].buf.ptr = <void *>(
-					<size_t>self.data[n].buf.ptr
-					+ <size_t>self.state.data.as_chars)
+					<size_t>self.data[n].buf.ptr + <size_t>ptr)
 		# alt: adjust pointers on the fly, no copying
-		# self.data = <Block *>(&(self.state.data.as_chars)[
+		# self.data = <Block *>(&(ptr)[
 		#		sizeof(uint32_t) + self.size * (sizeof(uint16_t))])
 
 	def __hash__(self):
+		cdef int n
+		if self._hash == -1:
+			self._hash = 5381
+			for n in range(self.bufsize):
+				# self._hash *= 33 ^ self.ptr[n]
+				self._hash = ((self._hash << 5) + self._hash) + self.ptr[n]
 		return self._hash
 
-	def __richcmp__(x, y, op):
+	def __richcmp__(x, y, int op):
 		cdef ImmutableRoaringBitmap iob1, iob2
-		# cdef RoaringBitmap ob1, ob2
-		# cdef int n
 		if op == 2:  # ==
 			if (isinstance(x, ImmutableRoaringBitmap)
 					and isinstance(y, ImmutableRoaringBitmap)):
 				iob1, iob2 = x, y
-				if iob1._hash != iob2._hash:
+				if (iob1.bufsize != iob2.bufsize
+						or iob1.__hash__() != iob2.__hash__()):
 					return False
+				return memcmp(iob1.ptr, iob2.ptr, iob1.bufsize) == 0
 		elif op == 3:  # !=
 			return not (x == y)
 		return richcmp(x, y, op)
@@ -134,11 +147,3 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 
 	def clear(self):
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
-
-
-cdef long hashbytes(char *buf, size_t len):
-	cdef size_t n
-	cdef long _hash = buf[0]
-	for n in range(1, len):
-		_hash *= 33 ^ (<uint8_t *>buf)[n]
-	return _hash
