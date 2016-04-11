@@ -30,17 +30,20 @@ cdef class MultiRoaringBitmap(object):
 		cdef int alignment = 32
 		cdef char [:] vstate
 		if filename is not None:
-			self.file = open(filename, 'wb')
+			self.file = open(filename, 'wb+', buffering=0)
 
-		tmp = [ImmutableRoaringBitmap(a) for a in init]
+		tmp = [None if a is None else ImmutableRoaringBitmap(a) for a in init]
 		self.size = len(tmp)
 		alloc = sizeof(uint32_t) + 2 * self.size * sizeof(uint32_t)
 		extra = alignment - alloc % alignment
 		alloc += extra
 		offset = alloc
 		for irb in tmp:
-			alloc += irb.bufsize
+			if irb is not None:
+				alloc += irb.bufsize
 
+		if filename is not None:
+			self.file.truncate(alloc)
 		self.state = mmap.mmap(
 				-1 if filename is None
 				else self.file.fileno(),
@@ -58,6 +61,9 @@ cdef class MultiRoaringBitmap(object):
 			# offset
 			self.ptr[1 + n] = offset
 			# size
+			if irb is None:
+				self.ptr[1 + n + self.size] = 0
+				continue
 			self.ptr[1 + n + self.size] = irb.bufsize
 			# copy data
 			memcpy(&(vstate[offset]), irb.ptr, irb.bufsize)
@@ -91,32 +97,44 @@ cdef class MultiRoaringBitmap(object):
 		return self.size
 
 	def __getitem__(self, i):
-		"""Return a copy of bitmap i as an ImmutableRoaringBitmap."""
+		"""Return a copy of bitmap `i` as an ``ImmutableRoaringBitmap``,
+		or ``None`` if it is empty."""
 		cdef ImmutableRoaringBitmap ob1
+		if self.sizes[i] == 0:
+			return None
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob1._setptr(&(<char *>self.ptr)[self.offsets[i]], self.sizes[i])
 		return ob1
 
 	def intersection(self, indices):
 		"""Given a list of indices of roaring bitmaps in this collection,
-		return their intersecion as a mutable RoaringBitmap."""
+		return their intersecion as a mutable RoaringBitmap.
+
+		Returns ``None`` when an invalid index or empty bitmap is
+		encountered."""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef RoaringBitmap result
 		cdef char *ptr = <char *>self.ptr
-		cdef int i, j, n
+		cdef int i, j
+		for i in indices:
+			if i > self.size or self.sizes[i] == 0:
+				return None
+		if len(indices) == 0:
+			return None
+		elif len(indices) == 1:
+			return self[indices[0]]
 		indices.sort(key=lambda n: self.sizes[n])
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
-		# TODO with nogil:
+		# TODO with nogil?:
 		i, j = indices[0], indices[1]
 		ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 		ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
 		result = rb_and(ob1, ob2)
-		for n in indices[2:]:
-			i = indices[n]
+		for i in indices[2:]:
 			# swap out contents of ImmutableRoaringBitmap object
 			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 			rb_iand(result, ob1)
 			if result.size == 0:
-				break
+				return None
 		return result

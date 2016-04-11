@@ -51,8 +51,10 @@ def pair():
 
 @pytest.fixture(scope='module')
 def multi():
-	result = [[random.randint(0, 1000)
+	a = [random.randint(0, 1000)
 			for _ in range(random.randint(100, 2000))]
+	result = [[random.randint(0, 1000)
+			for _ in range(random.randint(100, 2000))] + a
 			for _ in range(100)]
 	return result
 
@@ -65,21 +67,29 @@ class Test_multirb(object):
 		for rb1, rb2 in zip(orig, mrb):
 			assert rb1 == rb2
 
+	def test_none(self, multi):
+		orig = [RoaringBitmap(a) for a in multi]
+		orig.insert(4, None)
+		mrb = MultiRoaringBitmap(orig)
+		assert len(orig) == len(mrb)
+		for rb1, rb2 in zip(orig, mrb):
+			assert rb1 == rb2
+		assert mrb.intersection([4, 5]) == None
+
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
 		res1 = ref.intersection(*[set(a) for a in multi[1:]])
 		mrb = MultiRoaringBitmap([ImmutableRoaringBitmap(a) for a in multi])
 		res2 = mrb.intersection(list(range(len(mrb))))
-		res2._checkconsistency()
 		assert res1 == res2
 
 	def test_serialize(self, multi):
 		orig = [RoaringBitmap(a) for a in multi]
 		mrb = MultiRoaringBitmap(orig)
 		with tempfile.NamedTemporaryFile(delete=False) as tmp:
-			mrb2 = MultiRoaringBitmap(orig, filename=filename)
+			mrb2 = MultiRoaringBitmap(orig, filename=tmp.name)
 			del mrb2
-			mrb_deserialized = MultiRoaringBitmap.fromfile(filename)
+			mrb_deserialized = MultiRoaringBitmap.fromfile(tmp.name)
 			assert len(orig) == len(mrb)
 			assert len(orig) == len(mrb_deserialized)
 			for rb1, rb2, rb3 in zip(orig, mrb, mrb_deserialized):
