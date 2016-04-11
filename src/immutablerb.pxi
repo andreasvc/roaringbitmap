@@ -33,13 +33,16 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		pass  # nothing to declare
 
 	def __getstate__(self):
+		if self.state is None:
+			state = array.clone(chararray, self.bufsize, False)
+			memcpy(state.data.as_chars, self.ptr, self.bufsize)
+			return state
 		return self.state
 
 	def __setstate__(self, array.array state):
 		"""`state` is a char array with the pickle format of RoaringBitmap.
 		Instead of copying this data, it will be used directly.
 		"""
-		# NB: for mmap, must avoid array/pickle.
 		self.state = state
 		# FIXME: 32 byte alignment depends on state.data being aligned.
 		self._setptr(state.data.as_chars, len(state))

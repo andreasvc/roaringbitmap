@@ -33,8 +33,11 @@ RoaringBitmap({5, 6, 7, 8, 9})
 
 import io
 import sys
+import mmap
 import heapq
 import array
+# import numpy
+from magicmemoryview import MagicMemoryView
 cimport cython
 
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int32_t

@@ -1,9 +1,10 @@
 """Unit tests for roaringbitmap"""
 from __future__ import division, absolute_import, unicode_literals
+import sys
 import random
 import pytest
 import pickle
-import sys
+import tempfile
 try:
 	from itertools import zip_longest
 except ImportError:
@@ -72,18 +73,20 @@ class Test_multirb(object):
 		res2._checkconsistency()
 		assert res1 == res2
 
-	def test_pickle(self, multi):
+	def test_serialize(self, multi):
 		orig = [RoaringBitmap(a) for a in multi]
 		mrb = MultiRoaringBitmap(orig)
-		mrb_pickled = pickle.dumps(mrb, protocol=-1)
-		mrb_unpickled = pickle.loads(mrb_pickled)
-		assert len(orig) == len(mrb)
-		assert len(orig) == len(mrb_unpickled)
-		for rb1, rb2, rb3 in zip(orig, mrb, mrb_unpickled):
-			assert rb1 == rb2
-			assert rb1 == rb3
-			rb3._checkconsistency()
-			assert type(rb3) == ImmutableRoaringBitmap
+		with tempfile.NamedTemporaryFile(delete=False) as tmp:
+			mrb2 = MultiRoaringBitmap(orig, filename=filename)
+			del mrb2
+			mrb_deserialized = MultiRoaringBitmap.fromfile(filename)
+			assert len(orig) == len(mrb)
+			assert len(orig) == len(mrb_deserialized)
+			for rb1, rb2, rb3 in zip(orig, mrb, mrb_deserialized):
+				assert rb1 == rb2
+				assert rb1 == rb3
+				rb3._checkconsistency()
+				assert type(rb3) == ImmutableRoaringBitmap
 
 
 class Test_immutablerb(object):
