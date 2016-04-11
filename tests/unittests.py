@@ -1,6 +1,5 @@
 """Unit tests for roaringbitmap"""
-from __future__ import division, print_function, absolute_import, \
-	unicode_literals
+from __future__ import division, absolute_import, unicode_literals
 import random
 import pytest
 import pickle
@@ -207,7 +206,6 @@ class Test_immutablerb(object):
 		for data in single:
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
-			print(len(rb))
 			for _ in range(10):
 				x = random.choice(ref)
 				assert x in rb
@@ -216,7 +214,6 @@ class Test_immutablerb(object):
 	def test_rank2(self):
 		rb = ImmutableRoaringBitmap(range(0, 100000, 7))
 		rb = rb.union(range(100000, 200000, 1000))
-		print(len(rb))
 		for k in range(100000):
 			assert rb.rank(k) == 1 + k // 7
 		for k in range(100000, 200000):
@@ -489,7 +486,6 @@ class Test_roaringbitmap(object):
 		for data in single:
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
-			print(len(rb))
 			for _ in range(10):
 				x = random.choice(ref)
 				assert x in rb
@@ -498,7 +494,6 @@ class Test_roaringbitmap(object):
 	def test_rank2(self):
 		rb = RoaringBitmap(range(0, 100000, 7))
 		rb.update(range(100000, 200000, 1000))
-		print(len(rb))
 		for k in range(100000):
 			assert rb.rank(k) == 1 + k // 7
 		for k in range(100000, 200000):

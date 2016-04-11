@@ -30,8 +30,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 			self.__setstate__(ob.__getstate__())
 
 	def __dealloc__(self):
-		free(self.data)
-		self.data = NULL
+		pass  # nothing to declare
 
 	def __getstate__(self):
 		return self.state
@@ -46,32 +45,24 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		self._setptr(state.data.as_chars, len(state))
 
 	cdef _setptr(self, char *ptr, size_t size):
-		cdef int n
 		self.ptr = ptr
+		self.offset = <size_t>ptr
 		self.bufsize = size
 		self._hash = -1
 		self.size = (<uint32_t *>ptr)[0]
 		self.capacity = self.size
 		self.keys = <uint16_t *>&(ptr[sizeof(uint32_t)])
-		# adjust pointers in advance:
-		self.data = <Block *>realloc(self.data, self.size * sizeof(Block))
-		for n in range(self.size):
-			self.data[n] = (<Block *>&(ptr[
-				sizeof(uint32_t) + self.size * sizeof(uint16_t)
-				+ n * sizeof(Block)]))[0]
-			self.data[n].buf.ptr = <void *>(
-					<size_t>self.data[n].buf.ptr + <size_t>ptr)
-		# alt: adjust pointers on the fly, no copying
-		# self.data = <Block *>(&(ptr)[
-		#		sizeof(uint32_t) + self.size * (sizeof(uint16_t))])
+		# pointers will be adjusted on the fly with self.offset
+		self.data = <Block *>&(ptr[
+				sizeof(uint32_t) + self.size * (sizeof(uint16_t))])
 
 	def __hash__(self):
 		cdef int n
 		if self._hash == -1:
 			self._hash = 5381
 			for n in range(self.bufsize):
-				# self._hash *= 33 ^ self.ptr[n]
 				self._hash = ((self._hash << 5) + self._hash) + self.ptr[n]
+				# i.e., self._hash *= 33 ^ self.ptr[n]
 		return self._hash
 
 	def __richcmp__(x, y, int op):

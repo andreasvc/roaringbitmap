@@ -13,9 +13,9 @@ cdef class MultiRoaringBitmap(object):
 
 	def __init__(self, list init):
 		cdef ImmutableRoaringBitmap irb
-		cdef array.array state
+		cdef array.array state  # FIXME use numpy, supports mmap
 		cdef int alignment = 32
-		cdef uint32_t alloc, offset, size
+		cdef uint32_t alloc, offset
 		cdef char *ptr
 		tmp = [rb.freeze() for rb in init]
 		self.size = len(tmp)
@@ -68,16 +68,20 @@ cdef class MultiRoaringBitmap(object):
 		cdef RoaringBitmap result
 		cdef char *ptr = <char *>self.ptr
 		cdef int i, j, n
+		# TODO with nogil:
+		# TODO mmap through numpy
 		indices.sort(key=lambda n: self.sizes[n])
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		i, j = indices[0], indices[1]
 		ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 		ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
-		result = ob1 & ob2
+		result = rb_and(ob1, ob2)
 		for n in indices[2:]:
 			i = indices[n]
 			# swap out contents of ImmutableRoaringBitmap object
 			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
-			result &= ob1
+			rb_iand(result, ob1)
+			if result.size == 0:
+				break
 		return result
