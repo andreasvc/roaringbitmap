@@ -119,6 +119,7 @@ include "multirb.pxi"
 
 rangegen = xrange if PY2 else range
 chararray = array.array(b'B' if PY2 else 'B')
+dblarray = array.array(b'd' if PY2 else 'd')
 
 
 cdef class RoaringBitmap(object):

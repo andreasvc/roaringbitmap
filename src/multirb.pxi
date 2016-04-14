@@ -138,3 +138,19 @@ cdef class MultiRoaringBitmap(object):
 			if result.size == 0:
 				return None
 		return result
+
+	def jaccard_dist(self, indices1, indices2):
+		"""Compute the Jaccard distances for pairs of roaring bitmaps
+		in this collection given by ``zip(indices1, indices2)``."""
+		cdef ImmutableRoaringBitmap ob1, ob2
+		cdef list result = array.clone(dblarray, len(indices1), False)
+		cdef char *ptr = <char *>self.ptr
+		cdef int i, j, n
+		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		for n, (i, j) in enumerate(zip(indices1, indices2)):
+			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
+			ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
+			result.data.as_double[n] = (ob1.jaccard_dist(ob2)
+					if self.sizes[i] and self.sizes[j] else 1)
+		return result
