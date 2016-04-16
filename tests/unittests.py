@@ -21,42 +21,45 @@ from roaringbitmap import RoaringBitmap, ImmutableRoaringBitmap, \
 
 # (numitems, maxnum)
 PARAMS = [
-	(200, 65535),
-	(65535 - 200, 65535),
-	(40000, 65535),
-	(4000, 1 << 31)]
+		('positive',   200, (1 << 16) - 1),
+		('dense',     5000, (1 << 16) - 1),
+		('inverted', 62000, (1 << 16) - 1),
+		('many keys', 4000, (1 << 25) - 1)
+		]
 
 
 @pytest.fixture(scope='module')
 def single():
 	random.seed(42)
 	result = []
-	for elements, maxnum in PARAMS:
-		result.append([random.randint(0, maxnum) for _ in range(elements)])
+	for name, elements, maxnum in PARAMS:
+		result.append((name,
+				sorted(random.randint(0, maxnum) for _ in range(elements))))
 	return result
 
 
 @pytest.fixture(scope='module')
 def pair():
 	result = []
-	for a in single():
-		for b in single():
-			for elements, maxnum in PARAMS:
-				b = b[:len(b) // 2]
-				b.extend(random.randint(0, maxnum)
-						for _ in range(elements // 2))
-				result.append((a, b))
+	for name1, a in single():
+		for name2, b in single():
+			b = sorted(b[:len(b) // 2] + a[len(a) // 2:])
+			result.append((name1 + ':' + name2, a, b))
 	return result
 
 
 @pytest.fixture(scope='module')
 def multi():
-	a = [random.randint(0, 1000)
-			for _ in range(random.randint(100, 2000))]
-	result = [[random.randint(0, 1000)
-			for _ in range(random.randint(100, 2000))] + a
+	a = sorted(random.randint(0, 2000)
+			for _ in range(random.randint(100, 2000)))
+	result = [sorted([random.randint(0, 2000)
+			for _ in range(random.randint(100, 2000))] + a)
 			for _ in range(100)]
 	return result
+
+
+def abbr(a):
+	return a[:500] + '...' + a[-500:]
 
 
 class Test_multirb(object):
@@ -74,7 +77,7 @@ class Test_multirb(object):
 		assert len(orig) == len(mrb)
 		for rb1, rb2 in zip(orig, mrb):
 			assert rb1 == rb2
-		assert mrb.intersection([4, 5]) == None
+		assert mrb.intersection([4, 5]) is None
 
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
@@ -82,6 +85,15 @@ class Test_multirb(object):
 		mrb = MultiRoaringBitmap([ImmutableRoaringBitmap(a) for a in multi])
 		res2 = mrb.intersection(list(range(len(mrb))))
 		assert res1 == res2
+
+	def test_clamp(self, multi):
+		a, b = sorted(random.sample(multi[0], 2))
+		ref = set.intersection(
+				*[set(x) for x in multi]) & set(range(a, b))
+		mrb = MultiRoaringBitmap([RoaringBitmap(x) for x in multi])
+		rb = mrb.intersection(list(range(len(mrb))), min=a, max=b)
+		assert a <= rb.min() and rb.max() < b
+		assert ref == rb, name
 
 	def test_serialize(self, multi):
 		orig = [RoaringBitmap(a) for a in multi]
@@ -109,25 +121,25 @@ class Test_immutablerb(object):
 		assert type(rb) == ImmutableRoaringBitmap
 
 	def test_initsorted(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(sorted(data))
 			rb = RoaringBitmap(sorted(data))
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_initunsorted(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(data)
 			rb = RoaringBitmap(data)
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_inititerator(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(a for a in data)
 			rb = RoaringBitmap(a for a in data)
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_initrange(self):
 		# creates a positive, dense, and inverted block, respectively
@@ -135,42 +147,42 @@ class Test_immutablerb(object):
 			ref = set(range(23, n))
 			rb = RoaringBitmap(range(23, n))
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_pickle(self, single):
-		for data in single:
+		for name, data in single:
 			rb = ImmutableRoaringBitmap(data)
 			rb_pickled = pickle.dumps(rb, protocol=-1)
 			rb_unpickled = pickle.loads(rb_pickled)
 			rb._checkconsistency()
-			assert rb_unpickled == rb
-			assert type(rb) == ImmutableRoaringBitmap
+			assert rb_unpickled == rb, name
+			assert type(rb) == ImmutableRoaringBitmap, name
 
 	def test_and(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
-			assert ref & ref2 == set(rb & rb2)
-			assert type(rb & rb2) == RoaringBitmap
+			assert ref & ref2 == set(rb & rb2), name
+			assert type(rb & rb2) == RoaringBitmap, name
 
 	def test_or(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref | ref2 == set(rb | rb2)
+			assert ref | ref2 == set(rb | rb2), name
 
 	def test_xor(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref ^ ref2 == set(rb ^ rb2)
+			assert ref ^ ref2 == set(rb ^ rb2), name
 
 	def test_sub(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref - ref2 == set(rb - rb2)
+			assert ref - ref2 == set(rb - rb2), name
 
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
@@ -178,7 +190,7 @@ class Test_immutablerb(object):
 		rb = ImmutableRoaringBitmap(multi[0])
 		res2 = rb.intersection(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
-		assert res1 == res2
+		assert res1 == res2, name
 
 	def test_aggregateor(self, multi):
 		ref = set(multi[0])
@@ -186,43 +198,59 @@ class Test_immutablerb(object):
 		rb = ImmutableRoaringBitmap(multi[0])
 		res2 = rb.union(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
-		assert res1 == res2
+		assert res1 == res2, name
 
 	def test_andlen(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
-			assert len(rb & rb2) == rb.intersection_len(rb2)
-			assert len(ref & ref2) == rb.intersection_len(rb2)
+			assert len(rb & rb2) == rb.intersection_len(rb2), name
+			assert len(ref & ref2) == rb.intersection_len(rb2), name
 
 	def test_orlen(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
-			assert len(ref | ref2) == rb.union_len(rb2)
-			assert len(rb | rb2) == rb.union_len(rb2)
+			assert len(ref | ref2) == rb.union_len(rb2), name
+			assert len(rb | rb2) == rb.union_len(rb2), name
 
 	def test_jaccard_dist(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
 			assert abs((len(ref & ref2) / float(len(ref | ref2)))
 					- rb.intersection_len(rb2)
-					/ float(rb.union_len(rb2))) < 0.001
+					/ float(rb.union_len(rb2))) < 0.001, name
 			assert abs((1 - (len(ref & ref2) / float(len(ref | ref2))))
-					- rb.jaccard_dist(rb2)) < 0.001
+					- rb.jaccard_dist(rb2)) < 0.001, name
 
 	def test_rank(self, single):
-		for data in single:
+		for name, data in single:
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
 			for _ in range(10):
 				x = random.choice(ref)
-				assert x in rb
-				assert rb.rank(x) == ref.index(x) + 1
+				assert x in rb, name
+				assert rb.rank(x) == ref.index(x) + 1, name
+
+	def test_select(self, single):
+		for name, data in single:
+			ref = sorted(set(data))
+			rb = ImmutableRoaringBitmap(data)
+			lrb = list(rb)
+			idx = [random.randint(0, len(ref) - 1) for _ in range(10)]
+			for i in idx:
+				assert lrb[i] == ref[i], name
+				assert rb.select(i) in rb, name
+				assert rb.select(i) == ref[i], name
+				assert rb.rank(rb.select(i)) - 1 == i, name
+				if rb.select(i) + 1 in rb:
+					assert rb.rank(rb.select(i) + 1) - 1 == i + 1, name
+				else:
+					assert rb.rank(rb.select(i) + 1) - 1 == i, name
 
 	def test_rank2(self):
 		rb = ImmutableRoaringBitmap(range(0, 100000, 7))
@@ -231,22 +259,6 @@ class Test_immutablerb(object):
 			assert rb.rank(k) == 1 + k // 7
 		for k in range(100000, 200000):
 			assert rb.rank(k) == 1 + 100000 // 7 + 1 + (k - 100000) // 1000
-
-	def test_select(self, single):
-		for data in single:
-			ref = sorted(set(data))
-			rb = ImmutableRoaringBitmap(data)
-			lrb = list(rb)
-			idx = [random.randint(0, len(ref)) for _ in range(10)]
-			for i in idx:
-				assert lrb[i] == ref[i]
-				assert rb.select(i) in rb
-				assert rb.select(i) == ref[i]
-				assert rb.rank(rb.select(i)) - 1 == i
-				if rb.select(i) + 1 in rb:
-					assert rb.rank(rb.select(i) + 1) - 1 == i + 1
-				else:
-					assert rb.rank(rb.select(i) + 1) - 1 == i
 
 	def test_select2(self):
 		gap = 1
@@ -266,25 +278,25 @@ class Test_roaringbitmap(object):
 		assert ref == rb
 
 	def test_initsorted(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(sorted(data))
 			rb = RoaringBitmap(sorted(data))
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_initunsorted(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(data)
 			rb = RoaringBitmap(data)
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_inititerator(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(a for a in data)
 			rb = RoaringBitmap(a for a in data)
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_initrange(self):
 		# creates a positive, dense, and inverted block, respectively
@@ -292,16 +304,16 @@ class Test_roaringbitmap(object):
 			ref = set(range(23, n))
 			rb = RoaringBitmap(range(23, n))
 			rb._checkconsistency()
-			assert ref == rb
+			assert ref == rb, name
 
 	def test_add(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set()
 			rb = RoaringBitmap()
 			for n in sorted(data):
 				ref.add(n)
 				rb.add(n)
-			assert rb == ref
+			assert rb == ref, name
 			with pytest.raises(OverflowError):
 				rb.add(-1)
 				rb.add(1 << 32)
@@ -310,7 +322,7 @@ class Test_roaringbitmap(object):
 			rb._checkconsistency()
 
 	def test_discard(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set()
 			rb = RoaringBitmap()
 			for n in sorted(data):
@@ -320,140 +332,142 @@ class Test_roaringbitmap(object):
 				ref.discard(n)
 				rb.discard(n)
 			rb._checkconsistency()
-			assert len(ref) == 0
-			assert len(rb) == 0
-			assert rb == ref
+			assert len(ref) == 0, name
+			assert len(rb) == 0, name
+			assert rb == ref, name
 
 	def test_contains(self, single):
-		for data in single:
+		for name, data in single:
 			ref = set(data)
 			rb = RoaringBitmap(data)
 			for a in data:
-				assert a in ref
-				assert a in rb
+				assert a in ref, name
+				assert a in rb, name
 			for a in set(range(20000)) - set(data):
-				assert a not in ref
-				assert a not in rb
+				assert a not in ref, name
+				assert a not in rb, name
 			rb._checkconsistency()
 
 	def test_eq(self, single):
-		for data in single:
+		for name, data in single:
 			ref, ref2 = set(data), set(data)
 			rb, rb2 = RoaringBitmap(data), RoaringBitmap(data)
-			assert ref == ref2
-			assert rb == rb2
-			a = ref == ref2
-			b = rb == rb2
-			assert a == b
+			assert (ref == ref2) == (rb == rb2), name
 
 	def test_neq(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref != ref2
-			assert rb != rb2
-			a = ref != ref2
-			b = rb != rb2
-			assert a == b
+			assert (ref != ref2) == (rb != rb2), name
 
 	def test_iter(self, single):
-		for data in single:
+		for name, data in single:
 			rb = RoaringBitmap(data)
-			assert list(iter(rb)) == sorted(set(data))
+			assert list(iter(rb)) == sorted(set(data)), name
 
 	def test_reversed(self, single):
-		for data in single:
+		for name, data in single:
 			rb = RoaringBitmap(data)
 			for a, b in zip_longest(reversed(rb), reversed(sorted(set(data)))):
-				assert a == b
+				assert a == b, name
 
 	def test_iand(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref &= ref2
 			rb &= rb2
 			rb._checkconsistency()
-			assert rb == ref
+			assert rb == ref, name
 
 	def test_ior(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref |= ref2
 			rb |= rb2
 			rb._checkconsistency()
-			assert rb == ref
+			assert rb == ref, name
 
 	def test_ixor(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref ^= ref2
 			rb ^= rb2
 			rb._checkconsistency()
-			assert len(ref) == len(rb)
-			assert ref == rb
+			assert len(ref) == len(rb), name
+			assert ref == rb, name
 
 	def test_isub(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			ref -= ref2
 			rb -= rb2
 			rb._checkconsistency()
 			assert len(ref) <= len(set(data1))
-			assert len(rb) <= len(set(data1))
-			assert len(ref) == len(rb)
-			assert ref == rb
+			assert len(rb) <= len(set(data1)), name
+			assert len(ref) == len(rb), name
+			assert ref == rb, name
 
 	def test_and(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref & ref2 == set(rb & rb2)
+			assert ref & ref2 == set(rb & rb2), name
 
 	def test_or(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref | ref2 == set(rb | rb2)
+			assert ref | ref2 == set(rb | rb2), name
 
 	def test_xor(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref ^ ref2 == set(rb ^ rb2)
+			assert ref ^ ref2 == set(rb ^ rb2), name
 
 	def test_sub(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert ref - ref2 == set(rb - rb2)
+			assert ref - ref2 == set(rb - rb2), name
 
 	def test_subset(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			refans = ref <= ref2
-			assert (set(rb) <= ref2) == refans
-			assert (rb <= rb2) == refans
+			assert (set(rb) <= ref2) == refans, name
+			assert (rb <= rb2) == refans, name
 			k = len(data2) // 2
 			ref, rb = set(data2[:k]), RoaringBitmap(data2[:k])
 			refans = ref <= ref2
-			assert (set(rb) <= ref2) == refans
-			assert (rb <= rb2) == refans
+			assert (set(rb) <= ref2) == refans, name
+			assert (rb <= rb2) == refans, name
 
 	def test_disjoint(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			refans = ref.isdisjoint(ref2)
-			assert rb.isdisjoint(rb2) == refans
+			assert rb.isdisjoint(rb2) == refans, name
 			data3 = [a for a in data2 if a not in ref]
 			ref3, rb3 = set(data3), RoaringBitmap(data3)
 			refans2 = ref.isdisjoint(ref3)
-			assert rb.isdisjoint(rb3) == refans2
+			assert rb.isdisjoint(rb3) == refans2, name
+
+	def test_clamp(self, single):
+		for name, data in single:
+			a, b = sorted(random.sample(data, 2))
+			ref = set(data).intersection(range(a, b))
+			rb = RoaringBitmap(data).intersection(range(a, b))
+			rb2 = RoaringBitmap(data).clamp(a, b)
+			assert a <= rb2.min() and rb2.max() < b, name
+			assert ref == rb2, (name, a, b)
+			assert rb == rb2, (name, a, b)
 
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
@@ -461,7 +475,7 @@ class Test_roaringbitmap(object):
 		rb = RoaringBitmap(multi[0])
 		rb.intersection_update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
-		assert rb == ref
+		assert rb == ref, name
 
 	def test_aggregateor(self, multi):
 		ref = set(multi[0])
@@ -469,40 +483,56 @@ class Test_roaringbitmap(object):
 		rb = RoaringBitmap(multi[0])
 		rb.update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
-		assert rb == ref
+		assert rb == ref, name
 
 	def test_andlen(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert len(rb & rb2) == rb.intersection_len(rb2)
-			assert len(ref & ref2) == rb.intersection_len(rb2)
+			assert len(rb & rb2) == rb.intersection_len(rb2), name
+			assert len(ref & ref2) == rb.intersection_len(rb2), name
 
 	def test_orlen(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert len(ref | ref2) == rb.union_len(rb2)
-			assert len(rb | rb2) == rb.union_len(rb2)
+			assert len(ref | ref2) == rb.union_len(rb2), name
+			assert len(rb | rb2) == rb.union_len(rb2), name
 
 	def test_jaccard_dist(self, pair):
-		for data1, data2 in pair:
+		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert abs((len(ref & ref2) / float(len(ref | ref2)))
 					- rb.intersection_len(rb2)
-					/ float(rb.union_len(rb2))) < 0.001
+					/ float(rb.union_len(rb2))) < 0.001, name
 			assert abs((1 - (len(ref & ref2) / float(len(ref | ref2))))
-					- rb.jaccard_dist(rb2)) < 0.001
+					- rb.jaccard_dist(rb2)) < 0.001, name
 
 	def test_rank(self, single):
-		for data in single:
+		for name, data in single:
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
 			for _ in range(10):
 				x = random.choice(ref)
-				assert x in rb
-				assert rb.rank(x) == ref.index(x) + 1
+				assert x in rb, name
+				assert rb.rank(x) == ref.index(x) + 1, name
+
+	def test_select(self, single):
+		for name, data in single:
+			ref = sorted(set(data))
+			rb = RoaringBitmap(data)
+			lrb = list(rb)
+			idx = [random.randint(0, len(ref) - 1) for _ in range(10)]
+			for i in idx:
+				assert lrb[i] == ref[i], (name, i, len(ref))
+				assert rb.select(i) in rb, name
+				assert rb.select(i) == ref[i], name
+				assert rb.rank(rb.select(i)) - 1 == i, name
+				if rb.select(i) + 1 in rb:
+					assert rb.rank(rb.select(i) + 1) - 1 == i + 1, name
+				else:
+					assert rb.rank(rb.select(i) + 1) - 1 == i, name
 
 	def test_rank2(self):
 		rb = RoaringBitmap(range(0, 100000, 7))
@@ -511,22 +541,6 @@ class Test_roaringbitmap(object):
 			assert rb.rank(k) == 1 + k // 7
 		for k in range(100000, 200000):
 			assert rb.rank(k) == 1 + 100000 // 7 + 1 + (k - 100000) // 1000
-
-	def test_select(self, single):
-		for data in single:
-			ref = sorted(set(data))
-			rb = RoaringBitmap(data)
-			lrb = list(rb)
-			idx = [random.randint(0, len(ref)) for _ in range(10)]
-			for i in idx:
-				assert lrb[i] == ref[i]
-				assert rb.select(i) in rb
-				assert rb.select(i) == ref[i]
-				assert rb.rank(rb.select(i)) - 1 == i
-				if rb.select(i) + 1 in rb:
-					assert rb.rank(rb.select(i) + 1) - 1 == i + 1
-				else:
-					assert rb.rank(rb.select(i) + 1) - 1 == i
 
 	def test_select2(self):
 		gap = 1
@@ -537,9 +551,9 @@ class Test_roaringbitmap(object):
 			gap *= 2
 
 	def test_pickle(self, single):
-		for data in single:
+		for name, data in single:
 			rb = RoaringBitmap(data)
 			rb_pickled = pickle.dumps(rb, protocol=-1)
 			rb_unpickled = pickle.loads(rb_pickled)
 			rb._checkconsistency()
-			assert rb_unpickled == rb
+			assert rb_unpickled == rb, name

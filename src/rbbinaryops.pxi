@@ -56,8 +56,7 @@ cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
-				block_iand(&(ob1.data[pos1]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_iand(&(ob1.data[pos1]), ob2._getblk(pos2, &b2))
 				if ob1.data[pos1].cardinality > 0:
 					keys[res] = ob1.keys[pos1]
 					data[res] = ob1.data[pos1]
@@ -93,8 +92,7 @@ cdef inline RoaringBitmap rb_isub(RoaringBitmap ob1, RoaringBitmap ob2):
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
-				block_isub(&(ob1.data[pos1]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_isub(&(ob1.data[pos1]), ob2._getblk(pos2, &b2))
 				if ob1.data[pos1].cardinality > 0:
 					keys[res] = ob1.keys[pos1]
 					data[res] = ob1.data[pos1]
@@ -134,15 +132,13 @@ cdef inline RoaringBitmap rb_ior(RoaringBitmap ob1, RoaringBitmap ob2):
 					break
 			elif ob1.keys[pos1] > ob2.keys[pos2]:
 				keys[res] = ob2.keys[pos2]
-				block_copy(&(data[res]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_copy(&(data[res]), ob2._getblk(pos2, &b2))
 				res += 1
 				pos2 += 1
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
-				block_ior(&(ob1.data[pos1]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_ior(&(ob1.data[pos1]), ob2._getblk(pos2, &b2))
 				keys[res] = ob1.keys[pos1]
 				data[res] = ob1.data[pos1]
 				res += 1
@@ -153,8 +149,7 @@ cdef inline RoaringBitmap rb_ior(RoaringBitmap ob1, RoaringBitmap ob2):
 	if pos1 == ob1.size:
 		for pos2 in range(pos2, ob2.size):
 			keys[res] = ob2.keys[pos2]
-			block_copy(&(data[res]),
-					ob2._addoff(&(ob2.data[pos2]), &b2))
+			block_copy(&(data[res]), ob2._getblk(pos2, &b2))
 			res += 1
 	elif pos2 == ob2.size:
 		for pos1 in range(pos1, ob1.size):
@@ -183,15 +178,13 @@ cdef inline RoaringBitmap rb_ixor(RoaringBitmap ob1, RoaringBitmap ob2):
 					break
 			elif ob1.keys[pos1] > ob2.keys[pos2]:
 				keys[res] = ob2.keys[pos2]
-				block_copy(&(data[res]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_copy(&(data[res]), ob2._getblk(pos2, &b2))
 				res += 1
 				pos2 += 1
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
-				block_ixor(&(ob1.data[pos1]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+				block_ixor(&(ob1.data[pos1]), ob2._getblk(pos2, &b2))
 				if ob1.data[pos1].cardinality > 0:
 					keys[res] = ob1.keys[pos1]
 					data[res] = ob1.data[pos1]
@@ -205,8 +198,7 @@ cdef inline RoaringBitmap rb_ixor(RoaringBitmap ob1, RoaringBitmap ob2):
 	if pos1 == ob1.size:
 		for pos2 in range(pos2, ob2.size):
 			keys[res] = ob2.keys[pos2]
-			block_copy(&(data[res]),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+			block_copy(&(data[res]), ob2._getblk(pos2, &b2))
 			res += 1
 	elif pos2 == ob2.size:
 		for pos1 in range(pos1, ob1.size):
@@ -236,8 +228,7 @@ cdef inline RoaringBitmap rb_and(RoaringBitmap ob1, RoaringBitmap ob2):
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
 				block_and(&(result.data[result.size]),
-						ob1._addoff(&(ob1.data[pos1]), &b1),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						ob1._getblk(pos1, &b1), ob2._getblk(pos2, &b2))
 				if result.data[result.size].cardinality:
 					result.keys[result.size] = ob1.keys[pos1]
 					result.size += 1
@@ -260,8 +251,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
-						result.size, ob1.keys[pos1],
-						ob1._addoff(&(ob1.data[pos1]), &b1))
+						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 				pos1 += 1
 				if pos1 == ob1.size:
 					break
@@ -271,8 +261,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
 				block_sub(&(result.data[result.size]),
-						ob1._addoff(&(ob1.data[pos1]), &b1),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						ob1._getblk(pos1, &b1), ob2._getblk(pos2, &b2))
 				if result.data[result.size].cardinality > 0:
 					result.keys[result.size] = ob1.keys[pos1]
 					result.size += 1
@@ -283,8 +272,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 		if pos2 == ob2.size:
 			for pos1 in range(pos1, ob1.size):
 				result._insertcopy(
-						result.size, ob1.keys[pos1],
-						ob1._addoff(&(ob1.data[pos1]), &b1))
+						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 	result._resize(result.size)
 	return result
 
@@ -299,22 +287,19 @@ cdef inline RoaringBitmap rb_or(RoaringBitmap ob1, RoaringBitmap ob2):
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
-						result.size, ob1.keys[pos1],
-						ob1._addoff(&(ob1.data[pos1]), &b1))
+						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 				pos1 += 1
 				if pos1 == ob1.size:
 					break
 			elif ob1.keys[pos1] > ob2.keys[pos2]:
 				result._insertcopy(
-						result.size, ob2.keys[pos2],
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
 				pos2 += 1
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
 				block_or(&(result.data[result.size]),
-						ob1._addoff(&(ob1.data[pos1]), &b1),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						ob1._getblk(pos1, &b1), ob2._getblk(pos2, &b2))
 				result.keys[result.size] = ob1.keys[pos1]
 				result.size += 1
 				pos1 += 1
@@ -325,13 +310,12 @@ cdef inline RoaringBitmap rb_or(RoaringBitmap ob1, RoaringBitmap ob2):
 		result._extendarray(ob2.size - pos2)
 		for pos2 in range(pos2, ob2.size):
 			result._insertcopy(result.size,
-					ob2.keys[pos2], ob2._addoff(&(ob2.data[pos2]), &b2))
+					ob2.keys[pos2], ob2._getblk(pos2, &b2))
 	elif pos2 == ob2.size:
 		result._extendarray(ob1.size - pos1)
 		for pos1 in range(pos1, ob1.size):
 			result._insertcopy(
-					result.size, ob1.keys[pos1],
-					ob1._addoff(&(ob1.data[pos1]), &b1))
+					result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 	result._resize(result.size)
 	return result
 
@@ -346,22 +330,19 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
-						result.size, ob1.keys[pos1],
-						ob1._addoff(&(ob1.data[pos1]), &b1))
+						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 				pos1 += 1
 				if pos1 == ob1.size:
 					break
 			elif ob1.keys[pos1] > ob2.keys[pos2]:
 				result._insertcopy(
-						result.size, ob2.keys[pos2],
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
 				pos2 += 1
 				if pos2 == ob2.size:
 					break
 			else:  # ob1.keys[pos1] == ob2.keys[pos2]:
 				block_xor(&(result.data[result.size]),
-						ob1._addoff(&(ob1.data[pos1]), &b1),
-						ob2._addoff(&(ob2.data[pos2]), &b2))
+						ob1._getblk(pos1, &b1), ob2._getblk(pos2, &b2))
 				if result.data[result.size].cardinality > 0:
 					result.keys[result.size] = ob1.keys[pos1]
 					result.size += 1
@@ -373,14 +354,12 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 		result._extendarray(ob2.size - pos2)
 		for pos2 in range(pos2, ob2.size):
 			result._insertcopy(
-					result.size, ob2.keys[pos2],
-					ob2._addoff(&(ob2.data[pos2]), &b2))
+					result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
 	elif pos2 == ob2.size:
 		result._extendarray(ob1.size - pos1)
 		for pos1 in range(pos1, ob1.size):
 			result._insertcopy(
-					result.size, ob1.keys[pos1],
-					ob1._addoff(&(ob1.data[pos1]), &b1))
+					result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 	result._resize(result.size)
 	return result
 
@@ -395,9 +374,7 @@ cdef bint rb_isdisjoint(RoaringBitmap self, RoaringBitmap ob):
 		if i < 0:
 			if -i - 1 >= ob.size:
 				return True
-		elif not block_isdisjoint(
-				self._addoff(&(self.data[n]), &b1),
-				ob._addoff(&(ob.data[i]), &b2)):
+		elif not block_isdisjoint(self._getblk(n, &b1), ob._getblk(i, &b2)):
 			return False
 	return True
 
@@ -416,8 +393,40 @@ cdef inline bint rb_issubset(RoaringBitmap self, RoaringBitmap ob):
 	i = 0
 	for n in range(self.size):
 		i = ob._binarysearch(i, ob.size, self.keys[n])
-		if not block_issubset(
-				self._addoff(&(self.data[n]), &b1),
-				ob._addoff(&(ob.data[i]), &b2)):
+		if not block_issubset(self._getblk(n, &b1), ob._getblk(i, &b2)):
 			return False
 	return True
+
+
+cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
+		uint32_t start, uint32_t stop):
+	cdef Block b1
+	cdef RoaringBitmap result = RoaringBitmap()
+	cdef int ii = self._getindex(highbits(start)), jj = ii
+	cdef int i = -ii - 1 if ii < 0 else ii, j = i
+	if highbits(start) != highbits(stop):
+		jj = self._getindex(highbits(stop))
+		j = min(self.size - 1, -jj - 1) if jj < 0 else jj
+	result._extendarray(j - i + 1)
+	memset(result.data, 0, result.capacity * sizeof(Block))
+	block_clamp(&(result.data[0]), self._getblk(i, &b1),
+			lowbits(start), lowbits(stop) if i == j and ii >= 0 else BLOCKSIZE)
+	if result.data[result.size].cardinality:
+		result.keys[result.size] = self.keys[i]
+		result.size += 1
+	else:
+		free(result.data[0].buf.ptr)
+	for n in range(i + 1, j):
+		block_copy(&(result.data[result.size]), self._getblk(n, &b1))
+		result.keys[result.size] = self.keys[n]
+		result.size += 1
+	if i != j:
+		block_clamp(&(result.data[result.size]), self._getblk(j, &b1),
+				0, lowbits(stop) if jj >= 0 else BLOCKSIZE)
+		if result.data[result.size].cardinality:
+			result.keys[result.size] = self.keys[j]
+			result.size += 1
+		else:
+			free(result.data[result.size].buf.ptr)
+	result._resize(result.size)
+	return result

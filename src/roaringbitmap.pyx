@@ -131,10 +131,8 @@ cdef class RoaringBitmap(object):
 	cdef size_t offset  # used for immutable bitmaps with relative pointers
 
 	def __cinit__(self, *args, **kwargs):
-		self.keys = <uint16_t *>malloc(INITCAPACITY * sizeof(uint16_t))
-		self.data = <Block *>malloc(INITCAPACITY * sizeof(Block))
-		self.capacity = INITCAPACITY
-		self.size = self.offset = 0
+		self.keys = self.data = NULL
+		self.capacity = self.size = self.offset = 0
 
 	def __init__(self, iterable=None):
 		"""Return a new RoaringBitmap with elements from ``iterable``.
@@ -194,7 +192,7 @@ cdef class RoaringBitmap(object):
 		cdef Block b1
 		if i >= 0:
 			return block_contains(
-					self._addoff(&(self.data[i]), &b1), lowbits(elem))
+					self._getblk(i, &b1), lowbits(elem))
 		return False
 
 	def __richcmp__(x, y, int op):
@@ -274,6 +272,11 @@ cdef class RoaringBitmap(object):
 		block_add(block, lowbits(elem))
 		block_convert(block)
 
+	def clamp(self, uint32_t start, uint32_t stop):
+		"""Return new set with range of values restricted to ``(start, stop)``.
+		"""
+		return rb_clamp(self, start, stop)
+
 	def discard(self, uint32_t elem):
 		"""Remove an element from the set if it is a member.
 
@@ -314,10 +317,11 @@ cdef class RoaringBitmap(object):
 		cdef int n
 		for n in range(self.size):
 			free(self.data[n].buf.ptr)
+		free(self.keys)
+		free(self.data)
 		self.size = 0
-		self.keys = <uint16_t *>realloc(
-				self.keys, INITCAPACITY * sizeof(uint16_t))
-		self.data = <Block *>realloc(self.data, INITCAPACITY * sizeof(Block))
+		self.keys = <uint16_t *>malloc(INITCAPACITY * sizeof(uint16_t))
+		self.data = <Block *>malloc(INITCAPACITY * sizeof(Block))
 		if self.keys is NULL or self.data is NULL:
 			raise MemoryError(INITCAPACITY)
 		self.capacity = INITCAPACITY
@@ -342,15 +346,14 @@ cdef class RoaringBitmap(object):
 				rangegen(self.min(), self.max() + 1))
 
 	def __iter__(self):
-		cdef RoaringBitmap ob = ensurerb(self)
 		cdef Block *block
 		cdef Block b1
 		cdef uint32_t high
 		cdef uint64_t cur
 		cdef int i, n, idx, low
-		for i in range(ob.size):
-			block = self._addoff(&(ob.data[i]), &b1)
-			high = (<uint32_t>(ob.keys[i])) << 16
+		for i in range(self.size):
+			block = self._getblk(i, &b1)
+			high = (<uint32_t>(self.keys[i])) << 16
 			if block.cardinality == BLOCKSIZE:
 				for low in range(BLOCKSIZE):
 					yield high | low
@@ -379,15 +382,14 @@ cdef class RoaringBitmap(object):
 						yield high | low
 
 	def __reversed__(self):
-		cdef RoaringBitmap ob = ensurerb(self)
 		cdef Block *block
 		cdef Block b1
 		cdef uint32_t high
 		cdef uint64_t cur
 		cdef int i, n, idx, low
-		for i in range(ob.size - 1, -1, -1):
-			block = self._addoff(&(ob.data[i]), &b1)
-			high = (<uint32_t>(ob.keys[i])) << 16
+		for i in range(self.size - 1, -1, -1):
+			block = self._getblk(i, &b1)
+			high = (<uint32_t>(self.keys[i])) << 16
 			if block.cardinality == BLOCKSIZE:
 				for low in reversed(range(BLOCKSIZE)):
 					yield high | low
@@ -452,8 +454,11 @@ cdef class RoaringBitmap(object):
 		return 'size=%d, cap=%d, data={%s}' % (
 				self.size, self.capacity,
 				', '.join([block_repr(self.keys[n],
-					self._addoff(&(self.data[n]), &b1))
+					self._getblk(n, &b1))
 				for n in range(self.size)]))
+
+	def _keys(self):
+		return [self.keys[n] for n in range(self.size)]
 
 	def __getstate__(self):
 		cdef array.array state
@@ -499,15 +504,19 @@ cdef class RoaringBitmap(object):
 
 	def __setstate__(self, array.array state):
 		cdef char *buf = state.data.as_chars
+		cdef void *tmp1
+		cdef void *tmp2
 		cdef Block *data
 		cdef size_t size, offset = sizeof(uint32_t)
 		cdef int n
 		self.clear()
 		self.size = (<uint32_t *>buf)[0]
-		self.keys = <uint16_t *>realloc(self.keys, self.size * sizeof(uint16_t))
-		self.data = <Block *>realloc(self.data, self.size * sizeof(Block))
-		if self.keys is NULL or self.data is NULL:
+		tmp1 = realloc(self.keys, self.size * sizeof(uint16_t))
+		tmp2 = realloc(self.data, self.size * sizeof(Block))
+		if tmp1 is NULL or tmp2 is NULL:
 			raise MemoryError(self.size)
+		self.keys = <uint16_t *>tmp1
+		self.data = <Block *>tmp2
 		self.capacity = self.size = self.size
 		memcpy(self.keys, &(buf[offset]), self.size * sizeof(uint16_t))
 		offset += self.size * sizeof(uint16_t)
@@ -665,8 +674,8 @@ cdef class RoaringBitmap(object):
 						break
 				else:
 					result += block_andlen(
-							ob1._addoff(&(ob1.data[pos1]), &b1),
-							ob2._addoff(&(ob2.data[pos2]), &b2))
+							ob1._getblk(pos1, &b1),
+							ob2._getblk(pos2, &b2))
 					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
@@ -696,8 +705,8 @@ cdef class RoaringBitmap(object):
 						break
 				else:
 					result += block_orlen(
-							ob1._addoff(&(ob1.data[pos1]), &b1),
-							ob2._addoff(&(ob2.data[pos2]), &b2))
+							ob1._getblk(pos1, &b1),
+							ob2._getblk(pos2, &b2))
 					pos1 += 1
 					pos2 += 1
 					if pos1 == ob1.size or pos2 == ob2.size:
@@ -735,8 +744,8 @@ cdef class RoaringBitmap(object):
 				else:
 					tmp1, tmp2 = 0, 0
 					block_andorlen(
-							ob1._addoff(&(ob1.data[pos1]), &b1),
-							ob2._addoff(&(ob2.data[pos2]), &b2),
+							ob1._getblk(pos1, &b1),
+							ob2._getblk(pos2, &b2),
 							&tmp1, &tmp2)
 					intersection_result += tmp1
 					union_result += tmp2
@@ -766,7 +775,7 @@ cdef class RoaringBitmap(object):
 				return size
 			else:
 				return size + block_rank(
-						self._addoff(&(self.data[n]), &b1),
+						self._getblk(n, &b1),
 						lowbits(x))
 		return size
 
@@ -784,7 +793,7 @@ cdef class RoaringBitmap(object):
 			if self.data[n].cardinality > leftover:
 				keycontrib = self.keys[n] << 16
 				lowcontrib = block_select(
-						self._addoff(&(self.data[n]), &b1),
+						self._getblk(n, &b1),
 						leftover)
 				return keycontrib | lowcontrib
 			leftover -= self.data[n].cardinality
@@ -857,7 +866,7 @@ cdef class RoaringBitmap(object):
 				lowbits(stop) if highbits(start) == highbits(stop)
 				else BLOCKSIZE)
 		# middle blocks
-		for key in range(highbits(start) + 1, highbits(stop) - 1):
+		for key in range(highbits(start) + 1, highbits(stop)):
 			block = self._insertempty(self.size, key, False)
 			block_initrange(block, 0, BLOCKSIZE)
 		# last block
@@ -934,26 +943,33 @@ cdef class RoaringBitmap(object):
 		"""Extend allocation with k extra elements + amortization."""
 		cdef int desired = self.size + k
 		cdef int newcapacity
+		cdef void *tmp1
+		cdef void *tmp2
 		if desired < self.capacity:
 			return
 		newcapacity = 2 * desired if self.size < 1024 else 5 * desired // 4
-		self.keys = <uint16_t *>realloc(self.keys,
-				newcapacity * sizeof(uint16_t))
-		self.data = <Block *>realloc(self.data, newcapacity * sizeof(Block))
-		if self.keys is NULL or self.data is NULL:
+		tmp1 = realloc(self.keys, newcapacity * sizeof(uint16_t))
+		tmp2 = realloc(self.data, newcapacity * sizeof(Block))
+		if tmp1 is NULL or tmp2 is NULL:
 			raise MemoryError(newcapacity)
+		self.keys = <uint16_t *>tmp1
+		self.data = <Block *>tmp2
 		self.capacity = newcapacity
 
 	cdef _resize(self, int k):
 		"""Set size and if necessary reduce array allocation to k elements."""
 		cdef int n
+		cdef void *tmp1
+		cdef void *tmp2
 		if k > INITCAPACITY and k * 2 < self.capacity:
 			for n in range(k, self.size):
 				free(self.data[n].buf.ptr)
-			self.keys = <uint16_t *>realloc(self.keys, k * sizeof(uint16_t))
-			self.data = <Block *>realloc(self.data, k * sizeof(Block))
-			if self.keys is NULL or self.data is NULL:
+			tmp1 = realloc(self.keys, k * sizeof(uint16_t))
+			tmp2 = realloc(self.data, k * sizeof(Block))
+			if tmp1 is NULL or tmp2 is NULL:
 				raise MemoryError((k, self.size, self.capacity))
+			self.keys = <uint16_t *>tmp1
+			self.data = <Block *>tmp2
 			self.capacity = k
 		self.size = k
 
@@ -1056,17 +1072,23 @@ cdef class RoaringBitmap(object):
 				assert self.keys[n] < self.keys[n + 1]
 			if self.data[n].state != DENSE:
 				for m in range(_getsize(&(self.data[n])) - 1):
-					b2 = self._addoff(&(self.data[n]), &b1)
+					b2 = self._getblk(n, &b1)
 					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1]
 
-	cdef inline Block *_addoff(self, Block *b, Block *tmp):
-		"""If there is an offset, copy b to tmp and add offset to its pointer,
-		otherwise return b itself."""
+	cdef inline Block *_getblk(self, int i, Block *tmp):
+		"""Get pointer to block `i`. If there is an offset, copy this block
+		to ``tmp`` and add offset to its pointer, otherwise return block itself.
+		"""
+		# a bit unelegant, but this makes it possible to use the same code
+		# for mutable & immutable variants.
+		if not 0 <= i < self.size:
+			print('illegal index', i, self.size)
+			abort()
 		if self.offset:
-			tmp[0] = b[0]
-			tmp.buf.ptr = <void *>(<size_t>b.buf.ptr + self.offset)
+			tmp[0] = self.data[i]
+			tmp.buf.ptr = <void *>(<size_t>tmp.buf.ptr + self.offset)
 			return tmp
-		return b
+		return &(self.data[i])
 
 
 cdef inline RoaringBitmap ensurerb(obj):

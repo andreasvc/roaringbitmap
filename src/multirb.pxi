@@ -15,7 +15,7 @@ cdef class MultiRoaringBitmap(object):
 	"""
 	cdef uint32_t size  # the number of roaring bitmaps
 	cdef uint32_t *offsets  # byte offset in ptr for each roaring bitmap
-	cdef uint32_t *sizes  # the size of each roaring bitmap, used as heuristic
+	cdef uint32_t *sizes  # the size in bytes of each roaring bitmap
 	cdef uint32_t *ptr  # the data
 	cdef object state  # array or mmap which should be kept alive for ptr
 	cdef object file
@@ -77,6 +77,16 @@ cdef class MultiRoaringBitmap(object):
 			if self.file is not None:
 				self.file.close()
 
+	def __getstate__(self):
+		return bytes(self.state)
+
+	def __setstate__(self, state):
+		self.state = state
+		self.ptr = <uint32_t *><char *>state
+		self.size = self.ptr[0]
+		self.offsets = &(self.ptr[1])
+		self.sizes = &(self.ptr[1 + self.size])
+
 	@classmethod
 	def fromfile(cls, filename):
 		"""Load a MultiRoaringBitmap from a file using mmap."""
@@ -93,6 +103,22 @@ cdef class MultiRoaringBitmap(object):
 		# rest is data
 		return ob
 
+	@classmethod
+	def frombuffer(cls, data, int offset):
+		cdef MultiRoaringBitmap ob = MultiRoaringBitmap.__new__(
+				MultiRoaringBitmap)
+		cdef char [:] vstate = MagicMemoryView(data, (len(data), ), b'c')
+		ob.ptr = <uint32_t *>&vstate[offset]
+		ob.size = ob.ptr[0]
+		ob.offsets = &(ob.ptr[1])
+		ob.sizes = &(ob.ptr[1 + ob.size])
+		# rest is data
+		return ob
+
+	def bufsize(self):
+		"""Return size in number of bytes."""
+		return self.offsets[self.size - 1] + self.sizes[self.size - 1]
+
 	def __len__(self):
 		return self.size
 
@@ -106,12 +132,15 @@ cdef class MultiRoaringBitmap(object):
 		ob1._setptr(&(<char *>self.ptr)[self.offsets[i]], self.sizes[i])
 		return ob1
 
-	def intersection(self, indices):
-		"""Given a list of indices of roaring bitmaps in this collection,
-		return their intersecion as a mutable RoaringBitmap.
+	def intersection(self, indices, min=None, max=None):
+		"""Compute intersection of given a list of indices of roaring bitmaps
+		in this collection.
 
-		Returns ``None`` when an invalid index or empty bitmap is
-		encountered."""
+		:returns: the intersection as a mutable RoaringBitmap.
+			Returns ``None`` when an invalid index is encountered or an empty
+			result is obtained.
+		:param min, max: if given, only return elements `n`
+		s.t. ``min <= n < max``."""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef RoaringBitmap result
 		cdef char *ptr = <char *>self.ptr
@@ -130,7 +159,11 @@ cdef class MultiRoaringBitmap(object):
 		i, j = indices[0], indices[1]
 		ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 		ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
-		result = rb_and(ob1, ob2)
+		if min is not None or max is not None:
+			result = ob1.clamp(min or 0, max or 0xffffffffUL)
+			rb_iand(result, ob2)
+		else:
+			result = rb_and(ob1, ob2)
 		for i in indices[2:]:
 			# swap out contents of ImmutableRoaringBitmap object
 			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
