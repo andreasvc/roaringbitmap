@@ -1,23 +1,24 @@
 """Unit tests for roaringbitmap"""
 from __future__ import division, absolute_import, unicode_literals
 import sys
+import array
 import random
 import pytest
 import pickle
 import tempfile
 try:
-	from itertools import zip_longest
-except ImportError:
-	from itertools import izip_longest as zip_longest
-try:
 	import faulthandler
 	faulthandler.enable()
 except ImportError:
 	pass
-if sys.version_info[0] < 3:
-	range = xrange
 from roaringbitmap import RoaringBitmap, ImmutableRoaringBitmap, \
 		MultiRoaringBitmap
+PY2 = sys.version_info[0] == 2
+if PY2:
+	range = xrange
+	from itertools import izip_longest as zip_longest
+else:
+	from itertools import zip_longest
 
 # (numitems, maxnum)
 PARAMS = [
@@ -86,12 +87,22 @@ class Test_multirb(object):
 		res2 = mrb.intersection(list(range(len(mrb))))
 		assert res1 == res2
 
+	def test_jaccard(self, multi):
+		mrb = MultiRoaringBitmap([ImmutableRoaringBitmap(a) for a in multi])
+		indices1 = array.array(b'L' if PY2 else 'L', [0, 6, 8])
+		indices2 = array.array(b'L' if PY2 else 'L', [1, 7, 6])
+		res = mrb.jaccard_dist(indices1, indices2)
+		ref = array.array(b'd' if PY2 else 'd', [mrb[i].jaccard_dist(mrb[j])
+				for i, j in zip(indices1, indices2)])
+		assert res == ref
+
+
 	def test_clamp(self, multi):
 		a, b = sorted(random.sample(multi[0], 2))
 		ref = set.intersection(
 				*[set(x) for x in multi]) & set(range(a, b))
 		mrb = MultiRoaringBitmap([RoaringBitmap(x) for x in multi])
-		rb = mrb.intersection(list(range(len(mrb))), min=a, max=b)
+		rb = mrb.intersection(list(range(len(mrb))), start=a, stop=b)
 		assert a <= rb.min() and rb.max() < b
 		assert ref == rb, name
 

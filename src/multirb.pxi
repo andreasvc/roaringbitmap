@@ -122,7 +122,7 @@ cdef class MultiRoaringBitmap(object):
 	def __len__(self):
 		return self.size
 
-	def __getitem__(self, i):
+	def __getitem__(self, long i):
 		"""Return a copy of bitmap `i` as an ``ImmutableRoaringBitmap``,
 		or ``None`` if it is empty."""
 		cdef ImmutableRoaringBitmap ob1
@@ -132,58 +132,75 @@ cdef class MultiRoaringBitmap(object):
 		ob1._setptr(&(<char *>self.ptr)[self.offsets[i]], self.sizes[i])
 		return ob1
 
-	def intersection(self, indices, min=None, max=None):
+	def getsize(self, long i):
+		return self.sizes[i]
+
+	def intersection(self, list indices,
+			uint32_t start=0, uint32_t stop=0xffffffffUL):
 		"""Compute intersection of given a list of indices of roaring bitmaps
 		in this collection.
 
 		:returns: the intersection as a mutable RoaringBitmap.
 			Returns ``None`` when an invalid index is encountered or an empty
 			result is obtained.
-		:param min, max: if given, only return elements `n`
-		s.t. ``min <= n < max``."""
+		:param start, stop: if given, only return elements `n`
+			s.t. ``start <= n < stop``."""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef RoaringBitmap result
 		cdef char *ptr = <char *>self.ptr
-		cdef int i, j
-		for i in indices:
-			if i > self.size or self.sizes[i] == 0:
-				return None
-		if len(indices) == 0:
+		cdef long i, j, numindices = len(indices)
+		if numindices == 0:
 			return None
-		elif len(indices) == 1:
-			return self[indices[0]]
-		indices.sort(key=lambda n: self.sizes[n])
+		for i in range(numindices):
+			j = indices[i]
+			if j > self.size or self.sizes[j] == 0:
+				return None
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		if numindices == 1:
+			ob1._setptr(&(ptr[self.offsets[0]]), self.sizes[0])
+			if start or stop < 0xffffffffUL:
+				return rb_clamp(ob1, start, stop)
+			return ob1
+		indices.sort(key=self.getsize)
 		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		# TODO with nogil?:
 		i, j = indices[0], indices[1]
 		ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 		ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
-		if min is not None or max is not None:
-			result = ob1.clamp(min or 0, max or 0xffffffffUL)
+		if start or stop < 0xffffffffUL:
+			result = rb_clamp(ob1, start, stop)
 			rb_iand(result, ob2)
 		else:
 			result = rb_and(ob1, ob2)
-		for i in indices[2:]:
+		for i in range(2, numindices):
+			j = indices[i]
 			# swap out contents of ImmutableRoaringBitmap object
-			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
+			ob1._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
 			rb_iand(result, ob1)
 			if result.size == 0:
 				return None
 		return result
 
-	def jaccard_dist(self, indices1, indices2):
+	def jaccard_dist(self, array.array indices1, array.array indices2):
 		"""Compute the Jaccard distances for pairs of roaring bitmaps
-		in this collection given by ``zip(indices1, indices2)``."""
+		in this collection given by ``zip(indices1, indices2)``.
+
+		>>> mrb.jaccard_dist(array.array('L', [0, 6, 8]),
+		...			array.array('L', [1, 7, 6]))
+		array.array('d', [0.3, 0.2, 0.56])
+
+		:param indices1, indices2: arrays of unsigned long integers.
+		"""
 		cdef ImmutableRoaringBitmap ob1, ob2
-		cdef list result = array.clone(dblarray, len(indices1), False)
+		cdef array.array result = array.clone(dblarray, len(indices1), False)
 		cdef char *ptr = <char *>self.ptr
 		cdef int i, j, n
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
-		for n, (i, j) in enumerate(zip(indices1, indices2)):
+		for n in range(len(indices1)):
+			i, j = indices1.data.as_ulongs[n], indices2.data.as_ulongs[n]
 			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 			ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
-			result.data.as_double[n] = (ob1.jaccard_dist(ob2)
+			result.data.as_doubles[n] = (rb_jaccard_dist(ob1, ob2)
 					if self.sizes[i] and self.sizes[j] else 1)
 		return result

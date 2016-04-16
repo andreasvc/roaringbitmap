@@ -726,42 +726,7 @@ cdef class RoaringBitmap(object):
 		Counts of union and intersection are performed simultaneously."""
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
-		cdef Block b1, b2
-		cdef uint32_t union_result = 0, intersection_result = 0, tmp1, tmp2
-		cdef int pos1 = 0, pos2 = 0
-		if pos1 < ob1.size and pos2 < ob2.size:
-			while True:
-				if ob1.keys[pos1] < ob2.keys[pos2]:
-					union_result += ob1.data[pos1].cardinality
-					pos1 += 1
-					if pos1 == ob1.size:
-						break
-				elif ob1.keys[pos1] > ob2.keys[pos2]:
-					union_result += ob2.data[pos2].cardinality
-					pos2 += 1
-					if pos2 == ob2.size:
-						break
-				else:
-					tmp1, tmp2 = 0, 0
-					block_andorlen(
-							ob1._getblk(pos1, &b1),
-							ob2._getblk(pos2, &b2),
-							&tmp1, &tmp2)
-					intersection_result += tmp1
-					union_result += tmp2
-					pos1 += 1
-					pos2 += 1
-					if pos1 == ob1.size or pos2 == ob2.size:
-						break
-		if pos1 == ob1.size and pos2 < ob2.size:
-			for pos2 in range(pos2, ob2.size):
-				union_result += ob2.data[pos2].cardinality
-		elif pos2 == ob2.size and pos1 < ob1.size:
-			for pos1 in range(pos1, ob1.size):
-				union_result += ob1.data[pos1].cardinality
-		if union_result == 0:
-			return 1
-		return 1 - (intersection_result / <double>union_result)
+		return rb_jaccard_dist(ob1, ob2)
 
 	def rank(self, uint32_t x):
 		"""Return the number of elements ``<= x`` that are in this set."""
@@ -1075,14 +1040,14 @@ cdef class RoaringBitmap(object):
 					b2 = self._getblk(n, &b1)
 					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1]
 
-	cdef inline Block *_getblk(self, int i, Block *tmp):
+	cdef inline Block *_getblk(self, int i, Block *tmp) nogil:
 		"""Get pointer to block `i`. If there is an offset, copy this block
 		to ``tmp`` and add offset to its pointer, otherwise return block itself.
 		"""
 		# a bit unelegant, but this makes it possible to use the same code
 		# for mutable & immutable variants.
 		if not 0 <= i < self.size:
-			print('illegal index', i, self.size)
+			printf('illegal index %d; size=%d\n', i, self.size)
 			abort()
 		if self.offset:
 			tmp[0] = self.data[i]

@@ -430,3 +430,42 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 			free(result.data[result.size].buf.ptr)
 	result._resize(result.size)
 	return result
+
+
+cdef inline double rb_jaccard_dist(RoaringBitmap ob1, RoaringBitmap ob2) nogil:
+		cdef Block b1, b2
+		cdef uint32_t union_result = 0, intersection_result = 0, tmp1, tmp2
+		cdef int pos1 = 0, pos2 = 0
+		if pos1 < ob1.size and pos2 < ob2.size:
+			while True:
+				if ob1.keys[pos1] < ob2.keys[pos2]:
+					union_result += ob1.data[pos1].cardinality
+					pos1 += 1
+					if pos1 == ob1.size:
+						break
+				elif ob1.keys[pos1] > ob2.keys[pos2]:
+					union_result += ob2.data[pos2].cardinality
+					pos2 += 1
+					if pos2 == ob2.size:
+						break
+				else:
+					tmp1, tmp2 = 0, 0
+					block_andorlen(
+							ob1._getblk(pos1, &b1),
+							ob2._getblk(pos2, &b2),
+							&tmp1, &tmp2)
+					intersection_result += tmp1
+					union_result += tmp2
+					pos1 += 1
+					pos2 += 1
+					if pos1 == ob1.size or pos2 == ob2.size:
+						break
+		if pos1 == ob1.size and pos2 < ob2.size:
+			for pos2 in range(pos2, ob2.size):
+				union_result += ob2.data[pos2].cardinality
+		elif pos2 == ob2.size and pos1 < ob1.size:
+			for pos1 in range(pos1, ob1.size):
+				union_result += ob1.data[pos1].cardinality
+		if union_result == 0:
+			return 1
+		return 1 - (intersection_result / <double>union_result)
