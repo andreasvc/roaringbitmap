@@ -157,7 +157,8 @@ cdef class MultiRoaringBitmap(object):
 				return None
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		if numindices == 1:
-			ob1._setptr(&(ptr[self.offsets[0]]), self.sizes[0])
+			i = indices[0]
+			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
 			if start or stop < 0xffffffffUL:
 				return rb_clamp(ob1, start, stop)
 			return ob1
