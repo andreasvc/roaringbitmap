@@ -42,6 +42,8 @@ METADATA = dict(name='roaringbitmap',
 				'Programming Language :: Python :: 3.3',
 				'Programming Language :: Cython',
 		],
+		requires=['magicmemoryview'],
+		install_requires=['magicmemoryview'],
 )
 
 # some of these directives increase performance,
@@ -68,14 +70,14 @@ if __name__ == '__main__':
 	os.environ['GCC_COLORS'] = 'auto'
 	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
 			'-Wno-strict-prototypes']
+	if not DEBUG:
+		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
+		extra_link_args = ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
 			directives.update(wraparound=True, boundscheck=True)
 			extra_compile_args += ['-g', '-O0']
 			extra_link_args = ['-g']
-		else:
-			extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
-			extra_link_args = ['-DNDEBUG']
 		ext_modules = cythonize(
 				[Extension(
 					'*',
