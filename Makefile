@@ -40,3 +40,13 @@ testdebug: debug
 
 testdebug2: debug2
 	gdb -ex run --args python2-dbg `which py.test` tests/unittests.py -v
+
+testdebug35:
+	python3.5-dbg setup.py install --user --with-cython --debug && \
+		gdb -ex run --args python3.5-dbg `which py.test` tests/unittests.py -v
+
+valgrind35:
+	python3.5-dbg setup.py install --user --with-cython --debug
+	valgrind --tool=memcheck --suppressions=valgrind-python.supp \
+		--leak-check=full --show-leak-kinds=definite \
+		python3.5-dbg `which py.test` tests/unittests.py -v

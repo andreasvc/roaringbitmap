@@ -76,22 +76,24 @@ cdef extern from "_arrayops.h":
 
 
 cdef union Buffer:
+	void *ptr
 	uint16_t *sparse
 	uint64_t *dense
-	void *ptr
+	size_t offset
+	uint64_t _padding  # ensure that this union takes at least 64 bits.
 
 
 cdef struct Block:
 	# A set of 2**16 integers, stored as bitmap or array.
 	#
-	# Whether this block contains a bitvector (DENSE); otherwise sparse array;
+	# This block may contain a bitvector (DENSE) or a sparse array;
 	# The array can contain elements corresponding to 0-bits (INVERTED)
 	# or 1-bits (POSITIVE).
 	Buffer buf  # data: sparse array or fixed-size bitvector
 	uint32_t cardinality  # the number of elements
 	uint16_t capacity  # number of allocated uint16_t elements
-	uint8_t state  # either DENSE, INVERTED, or POSITIVE
-
+	uint16_t state  # either DENSE, INVERTED, or POSITIVE
+	# NB: make state uint16_t so that the struct is 16 bytes without padding.
 
 # The maximum number of elements in a block
 DEF BLOCKSIZE = 1 << 16
@@ -146,19 +148,21 @@ cdef class RoaringBitmap(object):
 		``iterable`` may be a ``range`` (Python 3) or ``xrange`` (Python 2)
 		object, which will be constructed efficiently."""
 		cdef int n
+		cdef Block b1
 		cdef RoaringBitmap ob
 		if isinstance(iterable, rangegen):
 			_,  (start, stop, step) = iterable.__reduce__()
 			if step == 1:
 				self._initrange(start, stop)
 				return
+			# fall through
 		if isinstance(iterable, (list, tuple, set, dict)):
 			self._init2pass(iterable)
-		if isinstance(iterable, RoaringBitmap):
+		elif isinstance(iterable, RoaringBitmap):
 			ob = iterable
 			self._extendarray(ob.size)
 			for n in range(ob.size):
-				self._insertcopy(self.size, ob.keys[n], &(ob.data[n]))
+				self._insertcopy(self.size, ob.keys[n], ob._getblk(n, &b1))
 		elif iterable is not None:
 			self._inititerator(iterable)
 
@@ -264,7 +268,7 @@ cdef class RoaringBitmap(object):
 		if i >= 0:
 			block = &(self.data[i])
 		else:
-			block = self._insertempty(-i - 1, key, True)
+			block = self._insertempty(-i - 1, key)
 			block.state = POSITIVE
 			block.cardinality = 0
 			block.buf.sparse = allocsparse(INITCAPACITY)
@@ -523,7 +527,7 @@ cdef class RoaringBitmap(object):
 		data = <Block *>&(buf[offset])
 		for n in range(self.size):
 			self.data[n] = data[n]
-			offset = <size_t>data[n].buf.ptr
+			offset = data[n].buf.offset
 			if data[n].state == DENSE:
 				self.data[n].buf.dense = allocdense()
 				size = BITMAPSIZE
@@ -775,7 +779,7 @@ cdef class RoaringBitmap(object):
 
 	def _ridx(self, i):
 		if i < 0:
-			return len(self) - i
+			return len(self) + i
 		return i
 
 	def _slice(self, i):
@@ -826,17 +830,17 @@ cdef class RoaringBitmap(object):
 		cdef Block *block = NULL
 		cdef uint16_t key
 		# first block
-		block = self._insertempty(self.size, highbits(start), False)
+		block = self._insertempty(self.size, highbits(start))
 		block_initrange(block, lowbits(start),
 				lowbits(stop) if highbits(start) == highbits(stop)
 				else BLOCKSIZE)
 		# middle blocks
 		for key in range(highbits(start) + 1, highbits(stop)):
-			block = self._insertempty(self.size, key, False)
+			block = self._insertempty(self.size, key)
 			block_initrange(block, 0, BLOCKSIZE)
 		# last block
 		if self.keys[self.size - 1] != highbits(stop):
-			block = self._insertempty(self.size, highbits(stop), False)
+			block = self._insertempty(self.size, highbits(stop))
 			block_initrange(block, 0, lowbits(stop))
 
 	def _init2pass(self, iterable):
@@ -849,18 +853,17 @@ cdef class RoaringBitmap(object):
 			key = highbits(elem)
 			if key != prev:
 				i = self._getindex(key)
-				if i >= 0:
-					block = &(self.data[i])
-				else:
-					block = self._insertempty(-i - 1, key, False)
+				if i < 0:
+					block = self._insertempty(-i - 1, key)
 					block.cardinality = block.capacity = 0
+				else:
+					block = &(self.data[i])
 				prev = key
-			block.cardinality += 1
+			block.capacity += 1
 		# allocate blocks
 		for i in range(self.size):
 			block = &(self.data[i])
-			if block.cardinality < MAXARRAYLENGTH:
-				block.capacity = block.cardinality
+			if block.capacity < MAXARRAYLENGTH:
 				block.buf.sparse = allocsparse(block.capacity)
 				block.state = POSITIVE
 			else:  # if necessary, will convert to inverted later
@@ -868,7 +871,6 @@ cdef class RoaringBitmap(object):
 				block.buf.dense = allocdense()
 				memset(block.buf.dense, 0, BITMAPSIZE)
 				block.state = DENSE
-			block.cardinality = 0
 		# second pass, add elements for each block
 		prev = -1
 		for elem in iterable:
@@ -887,22 +889,55 @@ cdef class RoaringBitmap(object):
 		cdef Block *block = NULL
 		cdef uint32_t elem
 		cdef uint16_t key
-		cdef int i, prev = -1
+		cdef int n
+		cdef dict tmp = {}
+		cdef list values
 		for elem in iterable:
 			key = highbits(elem)
-			if key != prev:
-				i = self._getindex(key)
-				if i >= 0:
-					block = &(self.data[i])
-				else:
-					block = self._insertempty(-i - 1, key, True)
-					block.state = POSITIVE
-					block.cardinality = 0
-					block.buf.sparse = allocsparse(INITCAPACITY)
-					block.capacity = INITCAPACITY
-				prev = key
-			block_add(block, lowbits(elem))
+			if key not in tmp:
+				tmp[key] = set()
+			tmp[key].add(lowbits(elem))
+		for key in sorted(tmp):
+			values = sorted(tmp[key])
+			block = self._insertempty(self.size, key)
+			block.cardinality = len(values)
+			if block.cardinality < MAXARRAYLENGTH:
+				block.capacity = block.cardinality
+				block.buf.sparse = allocsparse(block.capacity)
+				block.state = POSITIVE
+				for n, elem in enumerate(values):
+					block.buf.sparse[n] = elem
+			elif block.cardinality == BLOCKSIZE:
+				block_initrange(block, 0, BLOCKSIZE)
+			else:
+				block.capacity = BITMAPSIZE // sizeof(uint16_t)
+				block.buf.dense = allocdense()
+				memset(block.buf.dense, 0, BITMAPSIZE)
+				block.state = DENSE
+				for elem in values:
+					SETBIT(block.buf.dense, elem)
 			block_convert(block)
+
+	# def _inititerator(self, iterable):
+	# 	cdef Block *block = NULL
+	# 	cdef uint32_t elem
+	# 	cdef uint16_t key
+	# 	cdef int i, prev = -1
+	# 	for elem in iterable:
+	# 		key = highbits(elem)
+	# 		if key != prev:
+	# 			i = self._getindex(key)
+	# 			if i >= 0:
+	# 				block = &(self.data[i])
+	# 			else:
+	# 				block = self._insertempty(-i - 1, key)
+	# 				block.state = POSITIVE
+	# 				block.cardinality = 0
+	# 				block.buf.sparse = allocsparse(INITCAPACITY)
+	# 				block.capacity = INITCAPACITY
+	# 			prev = key
+	# 		block_add(block, lowbits(elem))
+	# 		block_convert(block)
 
 	cdef _extendarray(self, int k):
 		"""Extend allocation with k extra elements + amortization."""
@@ -961,18 +996,14 @@ cdef class RoaringBitmap(object):
 				(self.size - i - 1) * sizeof(Block))
 		self.size -= 1
 
-	cdef Block *_insertempty(self, int i, uint16_t key, bint moveblocks):
-		"""Insert a new, uninitialized block.
-
-		:param moveblocks: if False, assume self.data array is uninitialized
-			and data does not have to be moved."""
+	cdef Block *_insertempty(self, int i, uint16_t key):
+		"""Insert a new, uninitialized block."""
 		self._extendarray(1)
 		if i < self.size:
 			memmove(&(self.keys[i + 1]), &(self.keys[i]),
 					(self.size - i) * sizeof(uint16_t))
-			if moveblocks:
-				memmove(&(self.data[i + 1]), &(self.data[i]),
-						(self.size - i) * sizeof(Block))
+			memmove(&(self.data[i + 1]), &(self.data[i]),
+					(self.size - i) * sizeof(Block))
 		self.size += 1
 		self.keys[i] = key
 		return &(self.data[i])
@@ -1034,11 +1065,13 @@ cdef class RoaringBitmap(object):
 			assert 0 <= self.data[n].cardinality < 1 << 16
 			assert 0 <= _getsize(&(self.data[n])) <= self.data[n].capacity
 			if n + 1 < self.size:
-				assert self.keys[n] < self.keys[n + 1]
+				assert self.keys[n] < self.keys[n + 1], (
+						n, self.keys[n], self.keys[n + 1])
 			if self.data[n].state != DENSE:
 				for m in range(_getsize(&(self.data[n])) - 1):
 					b2 = self._getblk(n, &b1)
-					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1]
+					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1], (
+							m, b2.buf.sparse[m], b2.buf.sparse[m + 1])
 
 	cdef inline Block *_getblk(self, int i, Block *tmp) nogil:
 		"""Get pointer to block `i`. If there is an offset, copy this block
@@ -1051,7 +1084,7 @@ cdef class RoaringBitmap(object):
 			abort()
 		if self.offset:
 			tmp[0] = self.data[i]
-			tmp.buf.ptr = <void *>(<size_t>tmp.buf.ptr + self.offset)
+			tmp.buf.ptr = <void *>(tmp.buf.offset + self.offset)
 			return tmp
 		return &(self.data[i])
 

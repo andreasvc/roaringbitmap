@@ -124,13 +124,20 @@ cdef class MultiRoaringBitmap(object):
 
 	def __getitem__(self, long i):
 		"""Return a copy of bitmap `i` as an ``ImmutableRoaringBitmap``,
-		or ``None`` if it is empty."""
+		or ``None`` if it is empty or an invalid index."""
 		cdef ImmutableRoaringBitmap ob1
-		if self.sizes[i] == 0:
+		if i < 0:
+			i += self.size
+		if i < 0 or i > self.size or self.sizes[i] == 0:
 			return None
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob1._setptr(&(<char *>self.ptr)[self.offsets[i]], self.sizes[i])
 		return ob1
+
+	def __iter__(self):
+		cdef int n
+		for n in range(self.size):
+			yield self[n]
 
 	def getsize(self, long i):
 		return self.sizes[i]
@@ -153,7 +160,7 @@ cdef class MultiRoaringBitmap(object):
 			return None
 		for i in range(numindices):
 			j = indices[i]
-			if j > self.size or self.sizes[j] == 0:
+			if j < 0 or j > self.size or self.sizes[j] == 0:
 				return None
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		if numindices == 1:

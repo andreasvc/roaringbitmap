@@ -1,15 +1,11 @@
 cdef inline richcmp(x, y, int op):
+	"""Python's ``set()`` considers all comparisons to non-sets as unequal,
+	but we allow comparison to any sequence of integers that can be
+	coerced to a RoaringBitmap."""
 	cdef RoaringBitmap ob1, ob2
 	cdef int n
 	if op == 2:  # ==
-		if not isinstance(x, RoaringBitmap):
-			# FIXME: what is best approach here?
-			# cost of constructing RoaringBitmap vs loss of sort with set()
-			# if non-RoaringBitmap is small, constructing new one is better
-			return RoaringBitmap(x) == y if len(x) < 1024 else x == set(y)
-		elif not isinstance(y, RoaringBitmap):
-			return x == RoaringBitmap(y) if len(y) < 1024 else set(x) == y
-		ob1, ob2 = x, y
+		ob1, ob2 = ensurerb(x), ensurerb(y)
 		if ob1.size != ob2.size:
 			return False
 		if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
@@ -19,13 +15,13 @@ cdef inline richcmp(x, y, int op):
 				return False
 		for n in range(ob1.size):
 			if memcmp(
-					<void *>(<size_t>ob1.data[n].buf.sparse + ob1.offset),
-					<void *>(<size_t>ob2.data[n].buf.sparse + ob2.offset),
+					<void *>(ob1.offset + ob1.data[n].buf.offset),
+					<void *>(ob2.offset + ob2.data[n].buf.offset),
 					_getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
 				return False
 		return True
 	elif op == 3:  # !=
-		return not (x == y)
+		return not richcmp(x, y, 2)
 	elif op == 1:  # <=
 		return ensurerb(x).issubset(y)
 	elif op == 5:  # >=
@@ -273,7 +269,8 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 			for pos1 in range(pos1, ob1.size):
 				result._insertcopy(
 						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
-	result._resize(result.size)
+		free(result.data[result.size].buf.ptr)
+		result._resize(result.size)
 	return result
 
 
@@ -350,17 +347,18 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
 					break
-	if pos1 == ob1.size:
-		result._extendarray(ob2.size - pos2)
-		for pos2 in range(pos2, ob2.size):
-			result._insertcopy(
-					result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
-	elif pos2 == ob2.size:
-		result._extendarray(ob1.size - pos1)
-		for pos1 in range(pos1, ob1.size):
-			result._insertcopy(
-					result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
-	result._resize(result.size)
+		if pos1 == ob1.size:
+			result._extendarray(ob2.size - pos2)
+			for pos2 in range(pos2, ob2.size):
+				result._insertcopy(
+						result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
+		elif pos2 == ob2.size:
+			result._extendarray(ob1.size - pos1)
+			for pos1 in range(pos1, ob1.size):
+				result._insertcopy(
+						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
+		free(result.data[result.size].buf.ptr)
+		result._resize(result.size)
 	return result
 
 
@@ -374,6 +372,7 @@ cdef bint rb_isdisjoint(RoaringBitmap self, RoaringBitmap ob):
 		if i < 0:
 			if -i - 1 >= ob.size:
 				return True
+			i = -i - 1
 		elif not block_isdisjoint(self._getblk(n, &b1), ob._getblk(i, &b2)):
 			return False
 	return True

@@ -754,7 +754,8 @@ cdef bint block_isdisjoint(Block *self, Block *other) nogil:
 					m, other.cardinality, self.buf.sparse[n])
 			if m >= 0:
 				return False
-			elif -m - 1 >= other.cardinality:
+			m = -m - 1
+			if m >= other.cardinality:
 				break
 	elif self.state == POSITIVE and other.state == INVERTED:
 		for n in range(self.cardinality):

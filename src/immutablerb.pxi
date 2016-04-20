@@ -24,7 +24,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		cdef ImmutableRoaringBitmap iob
 		if isinstance(iterable, ImmutableRoaringBitmap):
 			iob = iterable
-			self.__setstate__(array.copy(iob.__getstate__()))
+			self.__setstate__(iob.__getstate__())
 		else:
 			ob = ensurerb(iterable or ())
 			self.__setstate__(ob.__getstate__())
@@ -70,16 +70,16 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 
 	def __richcmp__(x, y, int op):
 		cdef ImmutableRoaringBitmap iob1, iob2
-		if op == 2:  # ==
-			if (isinstance(x, ImmutableRoaringBitmap)
-					and isinstance(y, ImmutableRoaringBitmap)):
+		if (isinstance(x, ImmutableRoaringBitmap)
+				and isinstance(y, ImmutableRoaringBitmap)):
+			if op == 2:  # ==
 				iob1, iob2 = x, y
 				if (iob1.bufsize != iob2.bufsize
 						or iob1.__hash__() != iob2.__hash__()):
 					return False
 				return memcmp(iob1.ptr, iob2.ptr, iob1.bufsize) == 0
-		elif op == 3:  # !=
-			return not (x == y)
+			elif op == 3:  # !=
+				return not (x == y)
 		return richcmp(x, y, op)
 
 	def __sizeof__(self):

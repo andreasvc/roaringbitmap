@@ -96,7 +96,6 @@ class Test_multirb(object):
 				for i, j in zip(indices1, indices2)])
 		assert res == ref
 
-
 	def test_clamp(self, multi):
 		a, b = sorted(random.sample(multi[0], 2))
 		ref = set.intersection(
@@ -104,7 +103,7 @@ class Test_multirb(object):
 		mrb = MultiRoaringBitmap([RoaringBitmap(x) for x in multi])
 		rb = mrb.intersection(list(range(len(mrb))), start=a, stop=b)
 		assert a <= rb.min() and rb.max() < b
-		assert ref == rb, name
+		assert ref == rb
 
 	def test_serialize(self, multi):
 		orig = [RoaringBitmap(a) for a in multi]
@@ -120,6 +119,32 @@ class Test_multirb(object):
 				assert rb1 == rb3
 				rb3._checkconsistency()
 				assert type(rb3) == ImmutableRoaringBitmap
+
+	def test_multi1(self):
+		for_multi = []
+		for i in range(5):
+			for_multi += [RoaringBitmap(random.sample(range(99999), 200))]
+		mrb = MultiRoaringBitmap(for_multi)
+		assert len(mrb) == 5
+		assert mrb[4] == for_multi[4]
+		assert mrb[5] is None
+		assert mrb[-1] == for_multi[-1]
+		list(mrb)
+		for n, rb in enumerate(mrb):
+			assert rb == for_multi[n], n
+
+	def test_multi2(self):
+		for_multi_pre = []
+		for x in range(3):
+			for_multi = []
+			for i in range(5):
+				for_multi += [RoaringBitmap(random.sample(range(99999), 200))]
+			mrb = MultiRoaringBitmap(for_multi)
+			for_multi_pre += [mrb[0],mrb[1]]
+
+		assert type(for_multi_pre) is list
+		for_multi_pre[-1]
+		list(for_multi_pre)
 
 
 class Test_immutablerb(object):
@@ -159,6 +184,16 @@ class Test_immutablerb(object):
 			rb = RoaringBitmap(range(23, n))
 			rb._checkconsistency()
 			assert ref == rb, name
+
+	def test_initrb(self):
+		r = RoaringBitmap(range(5))
+		i = ImmutableRoaringBitmap(r)
+		r = RoaringBitmap(i)
+		assert r == i
+
+		i = ImmutableRoaringBitmap(range(5))
+		r = RoaringBitmap(i)
+		assert r == i
 
 	def test_pickle(self, single):
 		for name, data in single:
@@ -315,7 +350,7 @@ class Test_roaringbitmap(object):
 			ref = set(range(23, n))
 			rb = RoaringBitmap(range(23, n))
 			rb._checkconsistency()
-			assert ref == rb, name
+			assert ref == rb, ('range(23, %d)' % n)
 
 	def test_add(self, single):
 		for name, data in single:
