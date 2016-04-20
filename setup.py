@@ -55,6 +55,7 @@ directives = {
 		'nonecheck': False,
 		'wraparound': False,
 		'boundscheck': False,
+		'infer_types': None,
 		'embedsignature': True,
 		'warn.unused': True,
 		'warn.unreachable': True,
@@ -68,6 +69,8 @@ if __name__ == '__main__':
 	if sys.version_info[:2] < (2, 7) or (3, 0) <= sys.version_info[:2] < (3, 3):
 		raise RuntimeError('Python version 2.7 or >= 3.3 required.')
 	os.environ['GCC_COLORS'] = 'auto'
+	# NB: could also use Cython compile-time definition,
+	# but this would lead to different C output for Python 2/3.
 	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
 			'-Wno-strict-prototypes']
 	if not DEBUG:

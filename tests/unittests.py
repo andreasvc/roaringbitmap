@@ -127,7 +127,8 @@ class Test_multirb(object):
 		mrb = MultiRoaringBitmap(for_multi)
 		assert len(mrb) == 5
 		assert mrb[4] == for_multi[4]
-		assert mrb[5] is None
+		with pytest.raises(IndexError):
+			mrb[5]
 		assert mrb[-1] == for_multi[-1]
 		list(mrb)
 		for n, rb in enumerate(mrb):

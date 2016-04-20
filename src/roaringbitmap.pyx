@@ -119,9 +119,10 @@ include "rbbinaryops.pxi"
 include "immutablerb.pxi"
 include "multirb.pxi"
 
-rangegen = xrange if PY2 else range
 chararray = array.array(b'B' if PY2 else 'B')
 dblarray = array.array(b'd' if PY2 else 'd')
+RANGE = xrange if PY2 else range
+EMPTYIRB = ImmutableRoaringBitmap()
 
 
 cdef class RoaringBitmap(object):
@@ -150,7 +151,7 @@ cdef class RoaringBitmap(object):
 		cdef int n
 		cdef Block b1
 		cdef RoaringBitmap ob
-		if isinstance(iterable, rangegen):
+		if isinstance(iterable, RANGE):
 			_,  (start, stop, step) = iterable.__reduce__()
 			if step == 1:
 				self._initrange(start, stop)
@@ -347,7 +348,7 @@ cdef class RoaringBitmap(object):
 	def __invert__(self):
 		"""Return copy with smallest to largest elements inverted."""
 		return self.symmetric_difference(
-				rangegen(self.min(), self.max() + 1))
+				RANGE(self.min(), self.max() + 1))
 
 	def __iter__(self):
 		cdef Block *block
@@ -655,7 +656,7 @@ cdef class RoaringBitmap(object):
 
 	def flip_range(self, uint32_t start, uint32_t stop):
 		"""In-place negation for range(start, stop)."""
-		self.symmetric_difference_update(rangegen(start, stop))
+		self.symmetric_difference_update(RANGE(start, stop))
 
 	def intersection_len(self, other):
 		"""Return the cardinality of the intersection.
@@ -786,7 +787,7 @@ cdef class RoaringBitmap(object):
 		# handle negative indices, step
 		start = 0 if i.start is None else self._ridx(i.start)
 		stop = len(self) if i.stop is None else self._ridx(i.stop)
-		return rangegen(
+		return RANGE(
 				self.select(start), self.select(stop - 1) + 1,
 				1 if i.step is None else i.step)
 
@@ -796,7 +797,7 @@ cdef class RoaringBitmap(object):
 		In the case of a slice, a new roaringbitmap is returned."""
 		if isinstance(i, slice):
 			return self.intersection(self._slice(i))
-		elif isinstance(i, int):
+		elif isinstance(i, (int, long)):
 			return self._ridx(i)
 		else:
 			raise TypeError('Expected integer index or slice object.')
@@ -805,7 +806,7 @@ cdef class RoaringBitmap(object):
 		"""Discard element with rank `i`, or a slice."""
 		if isinstance(i, slice):
 			self.difference_update(self._slice(i))
-		elif isinstance(i, int):
+		elif isinstance(i, (int, long)):
 			self.discard(self.select(self._ridx(i)))
 		else:
 			raise TypeError('Expected integer index or slice object.')
@@ -817,7 +818,7 @@ cdef class RoaringBitmap(object):
 		``True`` or ``False``."""
 		if isinstance(i, slice):
 			self.update(self._slice(i))
-		elif isinstance(i, int):
+		elif isinstance(i, (int, long)):
 			if bool(x):
 				raise NotImplementedError('use RoaringBitmap.add(x) to add an '
 						'element; The ith element is by definition '
