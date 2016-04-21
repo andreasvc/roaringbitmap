@@ -383,6 +383,16 @@ class Test_roaringbitmap(object):
 			assert len(rb) == 0, name
 			assert rb == ref, name
 
+	def test_pop(self):
+		rb = RoaringBitmap([60748, 28806, 54664, 28597, 58922, 75684, 56364,
+			67421, 52608, 55686, 10427, 48506, 64363, 14506, 73077, 59035,
+			70246, 19875, 73145, 40225, 58664, 6597, 65554, 73102, 26636,
+			74227, 59566, 19023])
+		while rb:
+			rb.pop()
+		rb._checkconsistency()
+		assert len(rb) == 0
+
 	def test_contains(self, single):
 		for name, data in single:
 			ref = set(data)

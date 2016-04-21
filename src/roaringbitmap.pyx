@@ -315,6 +315,8 @@ cdef class RoaringBitmap(object):
 			raise ValueError('pop from empty roaringbitmap')
 		high = self.keys[self.size - 1]
 		low = block_pop(&(self.data[self.size - 1]))
+		if self.data[self.size - 1].cardinality == 0:
+			self._removeatidx(self.size - 1)
 		return high << 16 | low
 
 	def clear(self):
@@ -1063,8 +1065,16 @@ cdef class RoaringBitmap(object):
 		cdef int n, m
 		for n in range(self.size):
 			assert self.data[n].state in (DENSE, POSITIVE, INVERTED)
-			assert 0 <= self.data[n].cardinality < 1 << 16
+			assert 1 <= self.data[n].cardinality < 1 << 16
 			assert 0 <= _getsize(&(self.data[n])) <= self.data[n].capacity
+			if self.data[n].state == POSITIVE:
+				assert 1 <= self.data[n].cardinality < MAXARRAYLENGTH
+			elif self.data[n].state == DENSE:
+				assert (MAXARRAYLENGTH <= self.data[n].cardinality
+						<= BLOCKSIZE - MAXARRAYLENGTH)
+			elif self.data[n].state == INVERTED:
+				assert (BLOCKSIZE - MAXARRAYLENGTH < self.data[n].cardinality
+						< BLOCKSIZE)
 			if n + 1 < self.size:
 				assert self.keys[n] < self.keys[n + 1], (
 						n, self.keys[n], self.keys[n + 1])
