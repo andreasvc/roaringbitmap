@@ -31,10 +31,12 @@ The code is licensed under GNU GPL v2, or any later version at your option.
 
 Installation, usage
 -------------------
+
 ::
-$ git clone https://github.com/andreasvc/roaringbitmap.git
-$ cd roaringbitmap
-$ make
+
+    $ git clone https://github.com/andreasvc/roaringbitmap.git
+    $ cd roaringbitmap
+    $ make
 
 (or ``make py2`` for Python 2)
 
