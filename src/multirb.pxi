@@ -206,7 +206,9 @@ cdef class MultiRoaringBitmap(object):
 		...			array.array('L', [1, 7, 6]))
 		array.array('d', [0.3, 0.2, 0.56])
 
-		:param indices1, indices2: arrays of unsigned long integers.
+		:param indices1, indices2: arrays of unsigned long integers,
+			created with ``array.array('L')``. Ensure that all indices `i`
+			are in the range ``0 <= i < len(self)``.
 		"""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef array.array result = array.clone(dblarray, len(indices1), False)

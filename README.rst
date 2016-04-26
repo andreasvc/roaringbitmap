@@ -7,7 +7,7 @@ arrays and bitmaps, whichever takes the least space (which is always
 ``2 ** 16`` bits or less).
 
 This datastructure is useful for storing a large number of integers, e.g., for
-an inverted index used in search indexes and databases. In particular, it is
+an inverted index used by search engines and databases. In particular, it is
 possible to quickly compute the intersection of a series of sets, which can be
 used to implement a query as the conjunction of subqueries.
 
@@ -22,27 +22,42 @@ stored just as compactly as blocks that are mostly empty. Other blocks are
 encoded as bitmaps of fixed size. This trick is based on the implementation in
 Lucene, cf. https://issues.apache.org/jira/browse/LUCENE-5983
 
-License
--------
-This code is licensed under GNU GPL v2, or any later version at your option.
+License, requirements
+---------------------
+The code is licensed under GNU GPL v2, or any later version at your option.
 
-Requirements
-------------
-- Python 2.7+/3   http://www.python.org (headers required, e.g. python-dev package)
-- Cython 0.20+    http://www.cython.org
+- Python 2.7+/3.3+  http://www.python.org (headers required, e.g. python-dev package)
+- Cython 0.20+      http://www.cython.org
 
-Installation
-------------
-``$ make``
+Installation, usage
+-------------------
+::
+$ git clone https://github.com/andreasvc/roaringbitmap.git
+$ cd roaringbitmap
+$ make
 
-Usage
------
+(or ``make py2`` for Python 2)
+
 A ``RoaringBitmap()`` can be used as a replacement for a normal (mutable)
-Python set containing (unsigned) 32-bit integers::
+Python set containing (unsigned) 32-bit integers:
+
+.. code-block:: python
 
     >>> from roaringbitmap import RoaringBitmap
     >>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
     RoaringBitmap({5, 6, 7, 8, 9})
+
+A sequence of immutable RoaringBitmaps can be stored in a single file and
+accessed efficiently with ``mmap``, without needing to copy or deserialize:
+
+.. code-block:: python
+
+    >>> from roaringbitmap import MultiRoaringBitmap
+    >>> mrb = MultiRoaringBitmap([range(n, n + 5) for n in range(10)], filename='index')
+
+    >>> mrb = MultiRoaringBitmap.fromfile('index')
+    >>> mrb[5]
+    ImmutableRoaringBitmap({5, 6, 7, 8, 9})
 
 For API documentation cf. http://roaringbitmap.readthedocs.org
 

@@ -79,7 +79,9 @@ if __name__ == '__main__':
 	if USE_CYTHON:
 		if DEBUG:
 			directives.update(wraparound=True, boundscheck=True)
-			extra_compile_args += ['-g', '-O0']
+			extra_compile_args += ['-g', '-O0',
+					# '-fsanitize=address', '-fsanitize=undefined',
+					'-fno-omit-frame-pointer']
 			extra_link_args = ['-g']
 		ext_modules = cythonize(
 				[Extension(
