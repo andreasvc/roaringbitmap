@@ -32,12 +32,11 @@ RoaringBitmap({5, 6, 7, 8, 9})
 # [ ] error checking, robustness
 
 import io
+import os
 import sys
 import mmap
 import heapq
 import array
-# import numpy
-from magicmemoryview import MagicMemoryView
 cimport cython
 
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int32_t
@@ -45,11 +44,18 @@ from libc.stdio cimport printf
 from libc.stdlib cimport free, malloc, calloc, realloc, abort
 from libc.string cimport memset, memcpy, memcmp, memmove
 from posix.stdlib cimport posix_memalign
+from cpython.buffer cimport PyBUF_SIMPLE, Py_buffer, PyObject_CheckBuffer, \
+		PyObject_GetBuffer, PyBuffer_Release
 from cpython cimport array
 cimport cython
 
 cdef extern from *:
 	cdef bint PY2
+
+
+cdef extern from "Python.h":
+	int PyObject_CheckReadBuffer(object)
+	int PyObject_AsReadBuffer(object, const void **, Py_ssize_t *)
 
 
 cdef extern from "macros.h":
@@ -1122,5 +1128,33 @@ cdef inline uint32_t min(uint32_t a, uint32_t b) nogil:
 cdef inline uint32_t max(uint32_t a, uint32_t b) nogil:
 	return a if a >= b else b
 
+
+cdef inline int getbufptr(
+		object obj, char ** ptr, Py_ssize_t * size, Py_buffer * buf):
+	"""Get a pointer from bytes/buffer object ``obj``.
+
+	On success, return 0, and set ``ptr``, ``size``, and possibly ``buf``."""
+	cdef int result = -1
+	ptr[0] = NULL
+	size[0] = 0
+	if PY2:
+		# Although the new-style buffer interface was backported to Python 2.6,
+		# some modules, notably mmap, only support the old buffer interface.
+		# Cf. http://bugs.python.org/issue9229
+		if PyObject_CheckReadBuffer(obj) == 1:
+			result = PyObject_AsReadBuffer(
+					obj, <const void **>ptr, size)
+	elif PyObject_CheckBuffer(obj) == 1:  # new-style Buffer interface
+		result = PyObject_GetBuffer(obj, buf, PyBUF_SIMPLE)
+		if result == 0:
+			ptr[0] = <char *>buf.buf
+			size[0] = buf.len
+	return result
+
+
+cdef inline void releasebuf(Py_buffer *buf):
+	"""Release buffer if necessary."""
+	if not PY2:
+		PyBuffer_Release(buf)
 
 __all__ = ['RoaringBitmap', 'ImmutableRoaringBitmap', 'MultiRoaringBitmap']

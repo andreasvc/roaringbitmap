@@ -61,7 +61,7 @@ accessed efficiently with ``mmap``, without needing to copy or deserialize:
     >>> mrb[5]
     ImmutableRoaringBitmap({5, 6, 7, 8, 9})
 
-For API documentation cf. http://roaringbitmap.readthedocs.org
+For API documentation cf. http://roaringbitmap.readthedocs.io
 
 Benchmarks
 ----------

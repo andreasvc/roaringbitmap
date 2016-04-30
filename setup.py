@@ -42,8 +42,6 @@ METADATA = dict(name='roaringbitmap',
 				'Programming Language :: Python :: 3.3',
 				'Programming Language :: Cython',
 		],
-		requires=['magicmemoryview'],
-		install_requires=['magicmemoryview'],
 )
 
 # some of these directives increase performance,
@@ -72,7 +70,7 @@ if __name__ == '__main__':
 	# NB: could also use Cython compile-time definition,
 	# but this would lead to different C output for Python 2/3.
 	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
-			'-Wno-strict-prototypes']
+			'-Wno-strict-prototypes', '-Wno-unreachable-code']
 	if not DEBUG:
 		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
 		extra_link_args = ['-DNDEBUG']

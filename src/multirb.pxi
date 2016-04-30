@@ -28,9 +28,13 @@ cdef class MultiRoaringBitmap(object):
 		cdef ImmutableRoaringBitmap irb
 		cdef uint32_t alloc, offset
 		cdef int alignment = 32
-		cdef char [:] vstate
+		cdef Py_buffer buffer
+		cdef Py_ssize_t size = 0
+		cdef char *ptr = NULL
+		cdef int result
+
 		if filename is not None:
-			self.file = open(filename, 'wb+', buffering=0)
+			self.file = os.open(filename, os.O_RDWR)
 
 		tmp = [None if a is None else ImmutableRoaringBitmap(a) for a in init]
 		self.size = len(tmp)
@@ -43,13 +47,14 @@ cdef class MultiRoaringBitmap(object):
 				alloc += irb.bufsize
 
 		if filename is not None:
-			self.file.truncate(alloc)
+			os.ftruncate(self.file, alloc)
 		self.state = mmap.mmap(
-				-1 if filename is None
-				else self.file.fileno(),
+				-1 if filename is None else self.file,
 				alloc, access=mmap.ACCESS_WRITE)
-		vstate = MagicMemoryView(self.state, (alloc, ), b'c')
-		self.ptr = <uint32_t *>&vstate[0]
+		result = getbufptr(self.state, &ptr, &size, &buffer)
+		self.ptr = <uint32_t *>ptr
+		if result != 0:
+			raise ValueError('could not get buffer from mmap.')
 
 		self.ptr[0] = self.size
 		self.offsets = &(self.ptr[1])
@@ -66,16 +71,17 @@ cdef class MultiRoaringBitmap(object):
 				continue
 			self.ptr[1 + n + self.size] = irb.bufsize
 			# copy data
-			memcpy(&(vstate[offset]), irb.ptr, irb.bufsize)
+			memcpy(&((<char *>self.ptr)[offset]), irb.ptr, irb.bufsize)
 			offset += irb.bufsize
 		if filename is not None:
 			self.state.flush()
+		releasebuf(&buffer)
 
 	def __dealloc__(self):
 		if isinstance(self.state, mmap.mmap):
 			self.state.close()
 			if self.file is not None:
-				self.file.close()
+				os.close(self.file)
 
 	def __getstate__(self):
 		return bytes(self.state)
@@ -91,28 +97,41 @@ cdef class MultiRoaringBitmap(object):
 	def fromfile(cls, filename):
 		"""Load a MultiRoaringBitmap from a file using mmap."""
 		cdef MultiRoaringBitmap ob
-		cdef char [:] vstate
+		cdef Py_buffer buffer
+		cdef char *ptr = NULL
+		cdef Py_ssize_t size = 0
 		ob = MultiRoaringBitmap.__new__(MultiRoaringBitmap)
-		ob.file = open(filename, 'rb')
-		ob.state = mmap.mmap(ob.file.fileno(), 0, access=mmap.ACCESS_READ)
-		vstate = MagicMemoryView(ob.state, (len(ob.state), ), b'c')
-		ob.ptr = <uint32_t *>&vstate[0]
+		ob.file = os.open(filename, os.O_RDONLY)
+		ob.state = mmap.mmap(ob.file, 0, access=mmap.ACCESS_READ)
+		result = getbufptr(ob.state, &ptr, &size, &buffer)
+		ob.ptr = <uint32_t *>ptr
+		if result != 0:
+			raise ValueError('could not get buffer from mmap.')
 		ob.size = ob.ptr[0]
 		ob.offsets = &(ob.ptr[1])
 		ob.sizes = &(ob.ptr[1 + ob.size])
 		# rest is data
+		releasebuf(&buffer)
 		return ob
 
 	@classmethod
 	def frombuffer(cls, data, int offset):
+		"""Load a MultiRoaringBitmap from a Python object using the buffer
+		interface (e.g. bytes or mmap object), starting at ``offset``."""
 		cdef MultiRoaringBitmap ob = MultiRoaringBitmap.__new__(
 				MultiRoaringBitmap)
-		cdef char [:] vstate = MagicMemoryView(data, (len(data), ), b'c')
-		ob.ptr = <uint32_t *>&vstate[offset]
+		cdef char *ptr = NULL
+		cdef Py_buffer buffer
+		cdef Py_ssize_t size = 0
+		result = getbufptr(data, &ptr, &size, &buffer)
+		ob.ptr = <uint32_t *>&ptr[offset]
+		if result != 0:
+			raise ValueError('could not get buffer from mmap.')
 		ob.size = ob.ptr[0]
 		ob.offsets = &(ob.ptr[1])
 		ob.sizes = &(ob.ptr[1 + ob.size])
 		# rest is data
+		releasebuf(&buffer)
 		return ob
 
 	def bufsize(self):
