@@ -34,7 +34,7 @@ cdef class MultiRoaringBitmap(object):
 		cdef int result
 
 		if filename is not None:
-			self.file = os.open(filename, os.O_RDWR)
+			self.file = os.open(filename, os.O_CREAT | os.O_RDWR)
 
 		tmp = [None if a is None else ImmutableRoaringBitmap(a) for a in init]
 		self.size = len(tmp)
