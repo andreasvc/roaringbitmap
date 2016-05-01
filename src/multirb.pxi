@@ -23,6 +23,8 @@ cdef class MultiRoaringBitmap(object):
 	def __init__(self, list init, filename=None):
 		"""
 		:param init: a list of set-like objects (e.g., RoaringBitmaps).
+			May contain ``None`` elements, which are treated as empty
+			sets.
 		:param filename: if given, result is stored in an mmap'd file.
 			File is overwritten if it already exists."""
 		cdef ImmutableRoaringBitmap irb
@@ -66,7 +68,7 @@ cdef class MultiRoaringBitmap(object):
 			# offset
 			self.ptr[1 + n] = offset
 			# size
-			if irb is None:
+			if irb is None or irb.size == 0:
 				self.ptr[1 + n + self.size] = 0
 				continue
 			self.ptr[1 + n + self.size] = irb.bufsize
