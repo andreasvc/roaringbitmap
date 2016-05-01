@@ -60,7 +60,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 				sizeof(uint32_t) + self.size * (sizeof(uint16_t))])
 
 	def __hash__(self):
-		cdef int n
+		cdef size_t n
 		if self._hash == -1:
 			self._hash = 5381
 			for n in range(self.bufsize):

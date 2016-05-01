@@ -3,7 +3,7 @@ cdef inline richcmp(x, y, int op):
 	but we allow comparison to any sequence of integers that can be
 	coerced to a RoaringBitmap."""
 	cdef RoaringBitmap ob1, ob2
-	cdef int n
+	cdef size_t n
 	if op == 2:  # ==
 		ob1, ob2 = ensurerb(x), ensurerb(y)
 		if ob1.size != ob2.size:
@@ -34,7 +34,7 @@ cdef inline richcmp(x, y, int op):
 
 
 cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
-	cdef int pos1 = 0, pos2 = 0, res = 0
+	cdef uint32_t pos1 = 0, pos2 = 0, res = 0
 	cdef uint16_t *keys = NULL
 	cdef Block *data = NULL
 	cdef Block b2
@@ -68,7 +68,7 @@ cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
 
 
 cdef inline RoaringBitmap rb_isub(RoaringBitmap ob1, RoaringBitmap ob2):
-	cdef int pos1 = 0, pos2 = 0, res = 0
+	cdef uint32_t pos1 = 0, pos2 = 0, res = 0
 	cdef uint16_t *keys = NULL
 	cdef Block *data = NULL
 	cdef Block b2
@@ -109,7 +109,7 @@ cdef inline RoaringBitmap rb_isub(RoaringBitmap ob1, RoaringBitmap ob2):
 
 
 cdef inline RoaringBitmap rb_ior(RoaringBitmap ob1, RoaringBitmap ob2):
-	cdef int pos1 = 0, pos2 = 0, res = 0
+	cdef uint32_t pos1 = 0, pos2 = 0, res = 0
 	cdef uint16_t *keys = NULL
 	cdef Block *data = NULL
 	cdef Block b2
@@ -157,7 +157,7 @@ cdef inline RoaringBitmap rb_ior(RoaringBitmap ob1, RoaringBitmap ob2):
 
 
 cdef inline RoaringBitmap rb_ixor(RoaringBitmap ob1, RoaringBitmap ob2):
-	cdef int pos1 = 0, pos2 = 0, res = 0
+	cdef uint32_t pos1 = 0, pos2 = 0, res = 0
 	cdef uint16_t *keys = NULL
 	cdef Block *data = NULL
 	cdef Block b2
@@ -207,7 +207,7 @@ cdef inline RoaringBitmap rb_ixor(RoaringBitmap ob1, RoaringBitmap ob2):
 
 cdef inline RoaringBitmap rb_and(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef RoaringBitmap result = RoaringBitmap()
-	cdef int pos1 = 0, pos2 = 0
+	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
 		result._extendarray(min(ob1.size, ob2.size))
@@ -239,7 +239,7 @@ cdef inline RoaringBitmap rb_and(RoaringBitmap ob1, RoaringBitmap ob2):
 
 cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef RoaringBitmap result = RoaringBitmap()
-	cdef int pos1 = 0, pos2 = 0
+	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
 		result._extendarray(ob1.size)
@@ -276,7 +276,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 
 cdef inline RoaringBitmap rb_or(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef RoaringBitmap result = RoaringBitmap()
-	cdef int pos1 = 0, pos2 = 0
+	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
 		result._extendarray(ob1.size + ob2.size)
@@ -319,7 +319,7 @@ cdef inline RoaringBitmap rb_or(RoaringBitmap ob1, RoaringBitmap ob2):
 
 cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef RoaringBitmap result = RoaringBitmap()
-	cdef int pos1 = 0, pos2 = 0
+	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
 		result._extendarray(ob1.size + ob2.size)
@@ -364,13 +364,14 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 
 cdef bint rb_isdisjoint(RoaringBitmap self, RoaringBitmap ob):
 	cdef Block b1, b2
-	cdef int i = 0, n
+	cdef size_t n
+	cdef int i = 0
 	if self.size == 0 or ob.size == 0:
 		return True
 	for n in range(self.size):
 		i = ob._binarysearch(i, ob.size, self.keys[n])
 		if i < 0:
-			if -i - 1 >= ob.size:
+			if -i - 1 >= <int>ob.size:
 				return True
 			i = -i - 1
 		elif not block_isdisjoint(self._getblk(n, &b1), ob._getblk(i, &b2)):
@@ -380,7 +381,8 @@ cdef bint rb_isdisjoint(RoaringBitmap self, RoaringBitmap ob):
 
 cdef inline bint rb_issubset(RoaringBitmap self, RoaringBitmap ob):
 	cdef Block b1, b2
-	cdef int i = 0, n
+	cdef size_t n
+	cdef int i = 0
 	if self.size == 0:
 		return True
 	elif ob.size == 0:
@@ -434,7 +436,7 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 cdef inline double rb_jaccard_dist(RoaringBitmap ob1, RoaringBitmap ob2) nogil:
 		cdef Block b1, b2
 		cdef uint32_t union_result = 0, intersection_result = 0, tmp1, tmp2
-		cdef int pos1 = 0, pos2 = 0
+		cdef uint32_t pos1 = 0, pos2 = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:

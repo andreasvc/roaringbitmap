@@ -117,7 +117,7 @@ cdef void block_initrange(Block *self, uint16_t start, uint32_t stop) nogil:
 		for n in range(a + 1, b):
 			self.buf.dense[n] = ones
 		self.buf.dense[b] = ones >> ((-stop) % 64)
-		for n in range(b + 1, BITNSLOTS(BLOCKSIZE)):
+		for n in range(b + 1, <uint32_t>BITNSLOTS(BLOCKSIZE)):
 			self.buf.dense[n] = 0
 
 
@@ -126,7 +126,7 @@ cdef void block_clamp(Block *result, Block *src, uint16_t start, uint32_t stop):
 	``start <= n < stop``."""
 	cdef Buffer buf
 	cdef int idx, elem, n, m
-	cdef uint32_t alloc, dummy = 0
+	cdef uint32_t alloc
 	cdef uint64_t cur, ones = ~(<uint64_t>0)
 	if src.state == DENSE or src.state == INVERTED:
 		buf = block_asdense(src)
@@ -143,7 +143,7 @@ cdef void block_clamp(Block *result, Block *src, uint16_t start, uint32_t stop):
 			alloc = min(stop - start, src.cardinality)
 			_resizeconvert(result, POSITIVE, alloc)
 			n = 0
-			while elem != -1 and elem < stop:
+			while elem != -1 and elem < <int>stop:
 				result.buf.sparse[n] = elem
 				n += 1
 				elem = iteratesetbits(buf.dense, &cur, &idx)
@@ -293,7 +293,8 @@ cdef void block_or(Block *result, Block *self, Block *other) nogil:
 
 cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 	"""Non-inplace xor; result may be preallocated."""
-	cdef int n, length = 0, alloc
+	cdef int length = 0, alloc
+	cdef size_t n
 	if self.state == DENSE and other.state == DENSE:
 		_resizeconvert(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 		result.cardinality = bitsetxor(result.buf.dense,
@@ -323,7 +324,7 @@ cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 		result.cardinality = self.cardinality
 		for n in range(self.cardinality):
 			SETBIT(result.buf.dense, self.buf.sparse[n])
-		for n in range(BLOCKSIZE - other.cardinality):
+		for n in range(<size_t>(BLOCKSIZE - other.cardinality)):
 			if TESTBIT(result.buf.dense, other.buf.sparse[n]):
 				CLEARBIT(result.buf.dense, other.buf.sparse[n])
 				result.cardinality -= 1
@@ -684,7 +685,7 @@ cdef void block_isub(Block *self, Block *other) nogil:
 
 cdef bint block_issubset(Block *self, Block *other) nogil:
 	cdef int m = 0
-	cdef uint32_t n
+	cdef size_t n
 	if self.cardinality > other.cardinality:
 		return False
 	elif self.state == DENSE and other.state == DENSE:
@@ -707,7 +708,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 			if m >= 0:
 				return False
 			m = -m - 1
-			if m >= BLOCKSIZE - other.cardinality:
+			if m >= <int>(BLOCKSIZE - other.cardinality):
 				break
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		# check if self array elements are subset
@@ -720,7 +721,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 	elif self.state == INVERTED and other.state == INVERTED:
 		# check if negative other array elements are subset of
 		# negative self array element
-		for n in range(BLOCKSIZE - other.cardinality):
+		for n in range(<size_t>(BLOCKSIZE - other.cardinality)):
 			m = binarysearch(self.buf.sparse,
 					m, BLOCKSIZE - self.cardinality, other.buf.sparse[n])
 			if m < 0:
@@ -755,7 +756,7 @@ cdef bint block_isdisjoint(Block *self, Block *other) nogil:
 			if m >= 0:
 				return False
 			m = -m - 1
-			if m >= other.cardinality:
+			if m >= <int>other.cardinality:
 				break
 	elif self.state == POSITIVE and other.state == INVERTED:
 		for n in range(self.cardinality):
@@ -894,13 +895,11 @@ cdef void block_andorlen(Block *self, Block *other,
 
 cdef int block_rank(Block *self, uint16_t x) nogil:
 	"""Number of 1-bits in this bitmap ``<= x``."""
-	cdef int result = 0
-	cdef int leftover
-	cdef size_t size
-	cdef uint32_t n
+	cdef int result = 0, leftover
+	cdef size_t size, n
 	if self.state == DENSE:
 		leftover = (x + 1) & (BITSIZE - 1)
-		for n in range(BITSLOT(x + 1)):
+		for n in range(<size_t>BITSLOT(x + 1)):
 			result += bit_popcount(self.buf.dense[n])
 		if leftover != 0:
 			result += bit_popcount(
@@ -923,15 +922,15 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 			return x + result - 1
 
 
-cdef int block_select(Block *self, int i) except -1:
+cdef int block_select(Block *self, uint16_t i) except -1:
 	"""Find smallest x s.t. rank(x) >= i."""
-	cdef int n, w = 0
-	cdef size_t size
+	cdef int n, size
+	cdef uint16_t w = 0
 	if i >= self.cardinality:
 		raise IndexError('select: index %d out of range 0..%d.' % (
 				i, self.cardinality))
 	elif self.state == DENSE:
-		for n in range(BITNSLOTS(BLOCKSIZE)):
+		for n in range(BLOCKSIZE // BITSIZE):
 			w = bit_popcount(self.buf.dense[n])
 			if w > i:
 				return BITSIZE * n + select64(self.buf.dense[n], i)
