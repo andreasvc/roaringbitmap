@@ -73,12 +73,12 @@ class Test_multirb(object):
 
 	def test_none(self, multi):
 		orig = [RoaringBitmap(a) for a in multi]
-		orig.insert(4, None)
+		orig.insert(4, RoaringBitmap())
 		mrb = MultiRoaringBitmap(orig)
 		assert len(orig) == len(mrb)
 		for rb1, rb2 in zip(orig, mrb):
 			assert rb1 == rb2
-		assert mrb.intersection([4, 5]) is None
+		assert mrb.intersection([4, 5]) == None
 
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
@@ -614,3 +614,9 @@ class Test_roaringbitmap(object):
 			rb_unpickled = pickle.loads(rb_pickled)
 			rb._checkconsistency()
 			assert rb_unpickled == rb, name
+
+	def test_invalid(self):
+		with pytest.raises(TypeError):
+			rb = RoaringBitmap([1, 2, 'a'])
+		with pytest.raises(TypeError):
+			RoaringBitmap([1, 2]) < [1, 2, 3]

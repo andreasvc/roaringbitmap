@@ -1,9 +1,15 @@
 cdef inline richcmp(x, y, int op):
-	"""Python's ``set()`` considers all comparisons to non-sets as unequal,
-	but we allow comparison to any sequence of integers that can be
-	coerced to a RoaringBitmap."""
+	"""Considers comparisons to RoaringBitmaps and sets;
+	other types raise a TypeError."""
 	cdef RoaringBitmap ob1, ob2
 	cdef size_t n
+	if x is None or y is None:
+		if op == 2 or op == 3:
+			return op == 3
+		raise TypeError
+	if (not isinstance(x, (RoaringBitmap, set))
+			or not isinstance(y, (RoaringBitmap, set))):
+		raise TypeError
 	if op == 2:  # ==
 		ob1, ob2 = ensurerb(x), ensurerb(y)
 		if ob1.size != ob2.size:
