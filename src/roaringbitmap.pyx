@@ -1012,6 +1012,7 @@ cdef class RoaringBitmap(object):
 					(self.size - i) * sizeof(Block))
 		self.size += 1
 		self.keys[i] = key
+		self.data[i].buf.ptr = NULL
 		return &(self.data[i])
 
 	cdef _insertcopy(self, int i, uint16_t key, Block *block):
