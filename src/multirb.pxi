@@ -234,13 +234,14 @@ cdef class MultiRoaringBitmap(object):
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef array.array result = array.clone(dblarray, len(indices1), False)
 		cdef char *ptr = <char *>self.ptr
-		cdef int i, j, n
+		cdef int i, j, n, lenindices1 = len(indices1)
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
-		for n in range(len(indices1)):
-			i, j = indices1.data.as_ulongs[n], indices2.data.as_ulongs[n]
-			ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
-			ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
-			result.data.as_doubles[n] = (rb_jaccard_dist(ob1, ob2)
-					if self.sizes[i] and self.sizes[j] else 1)
+		with nogil:
+			for n in range(lenindices1):
+				i, j = indices1.data.as_ulongs[n], indices2.data.as_ulongs[n]
+				ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
+				ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
+				result.data.as_doubles[n] = (rb_jaccard_dist(ob1, ob2)
+						if self.sizes[i] and self.sizes[j] else 1)
 		return result
