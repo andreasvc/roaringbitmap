@@ -27,12 +27,14 @@ with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.4pre',
+		version='0.4',
 		description='Roaring Bitmap',
 		long_description=README,
 		author='Andreas van Cranenburgh',
 		author_email='A.W.vanCranenburgh@uva.nl',
-		url='https://github.com/andreasvc/roaringbitmap/',
+		url='http://roaringbitmap.readthedocs.io',
+		license='GPL',
+		platforms=['Many'],
 		classifiers=[
 				'Development Status :: 4 - Beta',
 				'Intended Audience :: Science/Research',
