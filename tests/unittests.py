@@ -184,7 +184,7 @@ class Test_immutablerb(object):
 			ref = set(range(23, n))
 			rb = RoaringBitmap(range(23, n))
 			rb._checkconsistency()
-			assert ref == rb, name
+			assert ref == rb, n
 
 	def test_initrb(self):
 		r = RoaringBitmap(range(5))
@@ -237,7 +237,7 @@ class Test_immutablerb(object):
 		rb = ImmutableRoaringBitmap(multi[0])
 		res2 = rb.intersection(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
-		assert res1 == res2, name
+		assert res1 == res2
 
 	def test_aggregateor(self, multi):
 		ref = set(multi[0])
@@ -245,7 +245,7 @@ class Test_immutablerb(object):
 		rb = ImmutableRoaringBitmap(multi[0])
 		res2 = rb.union(*[ImmutableRoaringBitmap(a) for a in multi[1:]])
 		res2._checkconsistency()
-		assert res1 == res2, name
+		assert res1 == res2
 
 	def test_andlen(self, pair):
 		for name, data1, data2 in pair:
@@ -551,7 +551,7 @@ class Test_roaringbitmap(object):
 		rb = RoaringBitmap(multi[0])
 		rb.intersection_update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
-		assert rb == ref, name
+		assert rb == ref
 
 	def test_aggregateor(self, multi):
 		ref = set(multi[0])
@@ -559,7 +559,7 @@ class Test_roaringbitmap(object):
 		rb = RoaringBitmap(multi[0])
 		rb.update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
-		assert rb == ref, name
+		assert rb == ref
 
 	def test_andlen(self, pair):
 		for name, data1, data2 in pair:

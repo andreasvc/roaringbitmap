@@ -212,7 +212,7 @@ cdef void block_and(Block *result, Block *self, Block *other) nogil:
 		result.cardinality = length
 		_resize(result, result.cardinality)
 	elif self.state == POSITIVE and other.state == POSITIVE:
-		alloc = min(self.cardinality, other.cardinality) + 8
+		alloc = min(self.cardinality, other.cardinality) + OVERALLOC
 		_resizeconvert(result, POSITIVE, alloc)
 		result.cardinality = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -265,7 +265,8 @@ cdef void block_or(Block *result, Block *self, Block *other) nogil:
 		_resize(result, result.cardinality)
 		block_convert(result)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - min(self.cardinality, other.cardinality) + 8
+		alloc = BLOCKSIZE - min(self.cardinality, other.cardinality)
+		alloc += OVERALLOC
 		_resizeconvert(result, INVERTED, alloc)
 		length = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -372,14 +373,14 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 		_resize(result, length)
 		block_convert(result)
 	elif self.state == POSITIVE and other.state == INVERTED:
-		_resizeconvert(result, POSITIVE, self.cardinality + 8)
+		_resizeconvert(result, POSITIVE, self.cardinality + OVERALLOC)
 		result.cardinality = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
 				self.cardinality, BLOCKSIZE - other.cardinality,
 				result.buf.sparse)
 		_resize(result, result.cardinality)
 	elif self.state == INVERTED and other.state == POSITIVE:
-		_resizeconvert(result, POSITIVE, self.cardinality + 8)
+		_resizeconvert(result, POSITIVE, self.cardinality + OVERALLOC)
 		length = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
 				BLOCKSIZE - self.cardinality, other.cardinality,
@@ -442,13 +443,12 @@ cdef void block_iand(Block *self, Block *other) nogil:
 		self.cardinality = length
 		_resize(self, length)
 	elif self.state == POSITIVE and other.state == POSITIVE:
-		alloc = min(self.cardinality, other.cardinality) + 8
+		alloc = min(self.cardinality, other.cardinality) + OVERALLOC
 		buf.sparse = allocsparse(alloc)
 		self.cardinality = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
 				self.cardinality, other.cardinality,
-				# self.buf.sparse)
-				buf.sparse)
+				buf.sparse)  # NB: not in-place to allow SSE intrinsics
 		replacearray(self, buf, alloc)
 		_resize(self, self.cardinality)
 	elif self.state == INVERTED and other.state == DENSE:

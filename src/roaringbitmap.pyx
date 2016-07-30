@@ -110,8 +110,11 @@ DEF BITMAPSIZE = BLOCKSIZE // 8
 # Maximum length of positive/inverted sparse arrays:
 DEF MAXARRAYLENGTH = 1 << 12
 
-# Capacity to allocate for an empty array
+# Capacity (elements) to allocate for an empty array
 DEF INITCAPACITY = 4
+
+# extra elements in result to accomodate SSE/AVX vector operations
+DEF OVERALLOC = 8
 
 # The different ways a block may store its elements:
 DEF DENSE = 0

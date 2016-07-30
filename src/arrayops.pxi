@@ -60,9 +60,9 @@ cdef uint32_t intersect2by2(uint16_t *data1, uint16_t *data2,
 		return intersectgalloping(data2, length2, data1, length1, dest)
 	if dest is NULL:
 		return intersectcard(data1, data2, length1, length2)
-	# elif data1 is not dest and data2 is not dest:
-	# 	# NB: dest must have 8 elements extra capacity
-	# 	return intersect_uint16(data1, length1, data2, length2, dest)
+	elif data1 is not dest and data2 is not dest:
+		# NB: dest must have 8 elements extra capacity
+		return intersect_uint16(data1, length1, data2, length2, dest)
 	return intersect_general16(data1, length1, data2, length2, dest)
 	# return intersectlocal2by2(data1, length1, data2, length2, dest)
 

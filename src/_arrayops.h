@@ -87,7 +87,7 @@ static inline int32_t intersect_uint16(
     b += i_b;
     b_size -= i_b;
     result += count;
-    return intersect_general16(a, a_size, b, b_size, result);
+    return count + intersect_general16(a, a_size, b, b_size, result);
 }
 
 #else  /* __SSE4_2__ */
