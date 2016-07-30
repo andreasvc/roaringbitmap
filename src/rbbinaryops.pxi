@@ -409,15 +409,20 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 		uint32_t start, uint32_t stop):
 	cdef Block b1
 	cdef RoaringBitmap result = RoaringBitmap()
-	cdef int ii = self._getindex(highbits(start)), jj = ii
-	cdef int i = -ii - 1 if ii < 0 else ii, j = i
+	cdef int ii = self._getindex(highbits(start))
+	cdef int jj = ii
+	cdef int i = -ii - 1 if ii < 0 else ii
+	cdef int j = i
 	if highbits(start) != highbits(stop):
 		jj = self._getindex(highbits(stop))
-		j = min(self.size - 1, -jj - 1) if jj < 0 else jj
+		# when block was not found, round down to preceding block
+		j = -jj - 2 if jj < 0 else jj
 	result._extendarray(j - i + 1)
 	memset(result.data, 0, result.capacity * sizeof(Block))
-	block_clamp(&(result.data[0]), self._getblk(i, &b1),
-			lowbits(start), lowbits(stop) if i == j and ii >= 0 else BLOCKSIZE)
+	block_clamp(
+			&(result.data[0]), self._getblk(i, &b1),
+			lowbits(start) if i == ii else 0,
+			lowbits(stop) if ii == jj and ii >= 0 else BLOCKSIZE)
 	if result.data[result.size].cardinality:
 		result.keys[result.size] = self.keys[i]
 		result.size += 1
@@ -428,7 +433,8 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 		result.keys[result.size] = self.keys[n]
 		result.size += 1
 	if i != j:
-		block_clamp(&(result.data[result.size]), self._getblk(j, &b1),
+		block_clamp(
+				&(result.data[result.size]), self._getblk(j, &b1),
 				0, lowbits(stop) if jj >= 0 else BLOCKSIZE)
 		if result.data[result.size].cardinality:
 			result.keys[result.size] = self.keys[j]

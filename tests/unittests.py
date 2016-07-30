@@ -526,6 +526,25 @@ class Test_roaringbitmap(object):
 			assert ref == rb2, (name, a, b)
 			assert rb == rb2, (name, a, b)
 
+	def test_clamp_issue12(self):
+		b = RoaringBitmap([1, 2, 3])
+		assert b.clamp(0, 65536) == b
+		assert b.clamp(0, 65537) == b
+		assert b.clamp(0, 65538) == b
+		assert b.clamp(0, 65539) == b
+
+	def test_clamp2(self):
+		a = RoaringBitmap([0x00010001])
+		b = RoaringBitmap([0x00030003, 0x00050005])
+		c = RoaringBitmap([0x00070007])
+		x = a | b | c
+		assert x.clamp(0, 0x000FFFFF) == x
+		assert x.clamp(0x000200FF, 0x000FFFFF) == b | c
+		assert x.clamp(0x00030003, 0x000FFFFF) == b | c
+		assert x.clamp(0, 0x00060006) == a | b
+		assert x.clamp(0, 0x00050006) == a | b
+		assert x.clamp(0, 0x00050005) == a | RoaringBitmap([0x00030003])
+
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])
 		ref.intersection_update(*[set(a) for a in multi[1:]])

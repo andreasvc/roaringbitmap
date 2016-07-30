@@ -179,6 +179,8 @@ cdef void block_clamp(Block *result, Block *src, uint16_t start, uint32_t stop):
 		if start > src.buf.sparse[0]:
 			n = binarysearch(src.buf.sparse, 0, src.cardinality, start)
 			n = -n - 1 if n < 0 else n
+			if <uint32_t>n >= src.cardinality:
+				return
 		if stop <= src.buf.sparse[n]:
 			return
 		elif stop <= src.buf.sparse[m - 1]:
