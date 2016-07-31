@@ -20,6 +20,9 @@ Python ``set`` containing unsigned 32-bit integers:
 >>> from roaringbitmap import RoaringBitmap
 >>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
 RoaringBitmap({5, 6, 7, 8, 9})
+
+``ImmutableRoaringBitmap`` is an immutable variant (analogous to ``frozenset``)
+which is stored compactly as a contiguous block of memory.
 """
 # TODOs
 # [ ] use SSE/AVX2 intrinsics
