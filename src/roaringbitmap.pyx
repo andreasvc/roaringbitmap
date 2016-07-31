@@ -25,8 +25,12 @@ RoaringBitmap({5, 6, 7, 8, 9})
 which is stored compactly as a contiguous block of memory.
 """
 # TODOs
-# [ ] use SSE/AVX2 intrinsics
-# [ ] separate cardinality & binary ops for bitops
+# [ ] SSE/AVX2 intrinsics:
+#     array intersection [x] SSE; [ ] AVX
+#     bitmap=>array [ ] SSE; [ ] AVX
+# [ ] separate cardinality & binary ops for bitmaps
+#     [ ] and; [-] or; [ ] xor; [ ] sub
+#     slower in benchmarks
 # [ ] check growth strategy of arrays
 # [ ] more operations:
 #     [ ] effcient shifts
@@ -678,7 +682,8 @@ cdef class RoaringBitmap(object):
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
 		cdef Block b1, b2
-		cdef uint32_t pos1 = 0, pos2 = 0, result = 0
+		cdef uint32_t pos1 = 0, pos2 = 0
+		cdef size_t result = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:
@@ -706,7 +711,8 @@ cdef class RoaringBitmap(object):
 		cdef RoaringBitmap ob1 = ensurerb(self)
 		cdef RoaringBitmap ob2 = ensurerb(other)
 		cdef Block b1, b2
-		cdef uint32_t pos1 = 0, pos2 = 0, result = 0
+		cdef uint32_t pos1 = 0, pos2 = 0
+		cdef size_t result = 0
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:

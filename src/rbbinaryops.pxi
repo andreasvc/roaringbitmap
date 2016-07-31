@@ -447,8 +447,8 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 
 cdef inline double rb_jaccard_dist(RoaringBitmap ob1, RoaringBitmap ob2) nogil:
 		cdef Block b1, b2
-		cdef uint32_t union_result = 0, intersection_result = 0, tmp1, tmp2
-		cdef uint32_t pos1 = 0, pos2 = 0
+		cdef size_t union_result = 0, intersection_result = 0
+		cdef uint32_t pos1 = 0, pos2 = 0, tmp1, tmp2
 		if pos1 < ob1.size and pos2 < ob2.size:
 			while True:
 				if ob1.keys[pos1] < ob2.keys[pos2]:

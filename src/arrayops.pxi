@@ -157,8 +157,7 @@ cdef inline int intersectgalloping(
 
 
 cdef int union2by2(uint16_t *data1, uint16_t *data2,
-		int length1, int length2, uint16_t *dest,
-		uint32_t *intersect_count) nogil:
+		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0, n_elems
 	if length2 == 0:
 		if dest is not NULL:
@@ -169,7 +168,7 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 			memcpy(dest, data2, length2 * sizeof(uint16_t))
 		return length2
 	elif length1 > length2:
-		return union2by2(data2, data1, length2, length1, dest, intersect_count)
+		return union2by2(data2, data1, length2, length1, dest)
 	while True:
 		if data1[k1] < data2[k2]:
 			if dest is not NULL:
@@ -189,7 +188,6 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 			if dest is not NULL:
 				dest[pos] = data1[k1]
 			pos += 1
-			intersect_count[0] += 1
 			k1 += 1
 			k2 += 1
 			if k1 >= length1 or k2 >= length2:

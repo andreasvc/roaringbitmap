@@ -15,12 +15,11 @@ This implementation is based on the Java and C implementations at
 https://github.com/lemire/RoaringBitmap
 and https://github.com/lemire/CRoaring
 
-An additional feature of this implementation is that it uses arrays not only
-when a block contains less than ``2 ** 12`` elements, but also when it contains
-more than ``2 ** 32 - 2 ** 12`` elements; i.e., blocks that are mostly full are
-stored just as compactly as blocks that are mostly empty. Other blocks are
-encoded as bitmaps of fixed size. This trick is based on the implementation in
-Lucene, cf. https://issues.apache.org/jira/browse/LUCENE-5983
+Additional features of this implementation:
+
+- Blocks that are mostly full are stored compactly as an array of non-members
+  (instead of as an array of members or a fixed-size bitmap)
+- Collections of roaring bitmaps can be efficiently serialized with ``mmap``.
 
 License, requirements
 ---------------------
@@ -48,6 +47,9 @@ Python set containing (unsigned) 32-bit integers:
     >>> from roaringbitmap import RoaringBitmap
     >>> RoaringBitmap(range(10)) & RoaringBitmap(range(5, 15))
     RoaringBitmap({5, 6, 7, 8, 9})
+
+``ImmutableRoaringBitmap`` is an immutable variant (analogous to ``frozenset``)
+which is stored compactly as a contiguous block of memory.
 
 A sequence of immutable RoaringBitmaps can be stored in a single file and
 accessed efficiently with ``mmap``, without needing to copy or deserialize:

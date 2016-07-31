@@ -33,7 +33,7 @@ SKIP_FIRST_COMPARE:
             goto SKIP_FIRST_COMPARE;
         }
     }
-    return (out - initout);  // NOTREACHED
+    return (out - initout);  /* NOTREACHED */
 }
 
 
@@ -43,7 +43,7 @@ static inline int32_t intersect_uint16(
         const uint16_t* __restrict a, size_t a_size,
        const uint16_t* __restrict b, size_t b_size,
        uint16_t* __restrict result) {
-    // from https://highlyscalable.wordpress.com/2012/06/05/fast-intersection-sorted-lists-sse/
+    /* from https://highlyscalable.wordpress.com/2012/06/05/fast-intersection-sorted-lists-sse/ */
     size_t count = 0;
     static __m128i shuffle_mask16[256];
     static int built_shuffle_mask = 0;
