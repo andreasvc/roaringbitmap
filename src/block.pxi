@@ -230,7 +230,7 @@ cdef void block_and(Block *result, Block *self, Block *other) nogil:
 				result.buf.sparse)
 		_resize(result, result.cardinality)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		_resizeconvert(result, INVERTED, alloc)
 		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -323,7 +323,7 @@ cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 		_resize(result, result.cardinality)
 		block_convert(result)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		_resizeconvert(result, INVERTED, alloc)
 		length = xor2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -373,7 +373,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 				result.buf.sparse)
 		_resize(result, result.cardinality)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		_resizeconvert(result, INVERTED, alloc)
 		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -390,8 +390,8 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 				result.buf.sparse)
 		_resize(result, result.cardinality)
 	elif self.state == INVERTED and other.state == POSITIVE:
-		_resizeconvert(result, POSITIVE, self.cardinality + OVERALLOC)
-		length = intersect2by2(
+		_resizeconvert(result, INVERTED, other.cardinality + OVERALLOC)
+		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
 				BLOCKSIZE - self.cardinality, other.cardinality,
 				result.buf.sparse)
@@ -497,7 +497,7 @@ cdef void block_iand(Block *self, Block *other) nogil:
 		self.cardinality = length
 		_resize(self, length)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		buf.sparse = allocsparse(alloc)
 		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -628,7 +628,7 @@ cdef void block_ixor(Block *self, Block *other) nogil:
 		_resize(self, length)
 		self.cardinality = length
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		buf.sparse = allocsparse(alloc)
 		length = xor2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -680,7 +680,7 @@ cdef void block_isub(Block *self, Block *other) nogil:
 				self.buf.sparse)
 		_resize(self, self.cardinality)
 	elif self.state == INVERTED and other.state == INVERTED:
-		alloc = BLOCKSIZE - (self.cardinality + other.cardinality)
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
 		buf.sparse = allocsparse(alloc)
 		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
@@ -951,16 +951,13 @@ cdef Block *block_copy(Block *dest, Block *src) nogil:
 
 cdef str block_repr(uint16_t key, Block *self):
 	if self.state == DENSE:
-		return 'D(key=%d, <%d bits set>)' % (key, self.cardinality)
+		return 'D(key=%d, bits=%d, cap=%d)' % (key, self.cardinality, BLOCKSIZE)
 	elif self.state == POSITIVE:
-		return 'P(key=%d, crd=%d, cap=%d, %r)' % (
-				key, self.cardinality, self.capacity,
-				[self.buf.sparse[n] for n in range(self.cardinality)])
+		return 'P(key=%d, ints=%d, cap=%d)' % (
+				key, self.cardinality, self.capacity)
 	elif self.state == INVERTED:
-		return 'I(key=%d, crd=%d, cap=%d, %r)' % (
-				key, self.cardinality, self.capacity,
-				[self.buf.sparse[n] for n in range(
-					BLOCKSIZE - self.cardinality)])
+		return 'I(key=%d, ints=%d, cap=%d)' % (
+				key, BLOCKSIZE - self.cardinality, self.capacity)
 	else:
 		raise ValueError('repr: illegal block state=%d, key=%d, crd=%d, cap=%d'
 				% (self.state, key, self.cardinality, self.capacity))

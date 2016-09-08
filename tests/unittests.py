@@ -24,7 +24,7 @@ else:
 PARAMS = [
 		('positive',   200, (1 << 16) - 1),
 		('dense',     5000, (1 << 16) - 1),
-		('inverted', 62000, (1 << 16) - 1),
+		('inverted',  5000, (1 << 16) - 1),
 		('many keys', 4000, (1 << 25) - 1)
 		]
 
@@ -34,8 +34,12 @@ def single():
 	random.seed(42)
 	result = []
 	for name, elements, maxnum in PARAMS:
-		result.append((name,
-				sorted(random.randint(0, maxnum) for _ in range(elements))))
+		if name == 'inverted':
+			result.append((name, list(set(range((1 << 16) - 1))
+				- {random.randint(0, maxnum) for _ in range(elements)})))
+		else:
+			result.append((name, sorted(
+				random.randint(0, maxnum) for _ in range(elements))))
 	return result
 
 

@@ -474,7 +474,7 @@ cdef class RoaringBitmap(object):
 	def debuginfo(self):
 		"""Return a string with the internal representation of this set."""
 		cdef Block b1
-		return 'size=%d, cap=%d, data={%s}' % (
+		return 'keys=%d, cap=%d, data={%s}' % (
 				self.size, self.capacity,
 				', '.join([block_repr(self.keys[n],
 					self._getblk(n, &b1))
