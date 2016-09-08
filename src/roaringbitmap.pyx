@@ -459,7 +459,7 @@ cdef class RoaringBitmap(object):
 		"""Return total number of uint16_t elements stored."""
 		cdef uint32_t result = 0
 		for n in range(self.size):
-			result += 1 + _getsize(&(self.data[n]))
+			result += 1 + getsize(&(self.data[n]))
 		return result
 
 	def __bool__(self):
@@ -496,7 +496,7 @@ cdef class RoaringBitmap(object):
 		alloc = offset1 + self.size * (sizeof(uint16_t) + sizeof(Block))
 		alloc += alignment - alloc % alignment
 		for n in range(self.size):
-			alloc += _getsize(&(self.data[n])) * sizeof(uint16_t)
+			alloc += getsize(&(self.data[n])) * sizeof(uint16_t)
 			alloc += alignment - alloc % alignment
 		state = array.clone(chararray, alloc, False)
 		(<uint32_t *>state.data.as_chars)[0] = self.size
@@ -512,7 +512,7 @@ cdef class RoaringBitmap(object):
 			# copy block
 			ob = (<Block *>&(state.data.as_chars[offset1]))
 			ob[0] = self.data[n]
-			ob.capacity = _getsize(&(self.data[n]))
+			ob.capacity = getsize(&(self.data[n]))
 			ob.buf.ptr = <void *>offset2
 			offset1 += sizeof(Block)
 			# copy buffer of block
@@ -1036,7 +1036,7 @@ cdef class RoaringBitmap(object):
 					(self.size - i) * sizeof(uint16_t))
 			memmove(&(self.data[i + 1]), &(self.data[i]),
 					(self.size - i) * sizeof(Block))
-		size = _getsize(block)
+		size = getsize(block)
 		self.keys[i] = key
 		self.data[i] = block[0]
 		if self.data[i].state == DENSE:
@@ -1082,7 +1082,7 @@ cdef class RoaringBitmap(object):
 		for n in range(self.size):
 			assert self.data[n].state in (DENSE, POSITIVE, INVERTED)
 			assert 1 <= self.data[n].cardinality < 1 << 16
-			assert 0 <= _getsize(&(self.data[n])) <= self.data[n].capacity
+			assert 0 <= getsize(&(self.data[n])) <= self.data[n].capacity
 			if self.data[n].state == POSITIVE:
 				assert 1 <= self.data[n].cardinality < MAXARRAYLENGTH
 			elif self.data[n].state == DENSE:
@@ -1095,7 +1095,7 @@ cdef class RoaringBitmap(object):
 				assert self.keys[n] < self.keys[n + 1], (
 						n, self.keys[n], self.keys[n + 1])
 			if self.data[n].state != DENSE:
-				for m in range(_getsize(&(self.data[n])) - 1):
+				for m in range(getsize(&(self.data[n])) - 1):
 					b2 = self._getblk(n, &b1)
 					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1], (
 							m, b2.buf.sparse[m], b2.buf.sparse[m + 1])

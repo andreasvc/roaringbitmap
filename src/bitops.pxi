@@ -118,7 +118,6 @@ cdef inline void bitsetsubtractnocard(uint64_t *dest,
 	"""dest gets the src2 - src1."""
 	cdef size_t n
 	cdef uint64_t res1, res2
-	cdef uint32_t result = 0
 	for n in range(0, <size_t>(BLOCKSIZE // BITSIZE), 2):
 		res1 = src1[n] & ~src2[n]
 		res2 = src1[n + 1] & ~src2[n + 1]

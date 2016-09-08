@@ -23,7 +23,7 @@ cdef inline richcmp(x, y, int op):
 			if memcmp(
 					<void *>(ob1.offset + ob1.data[n].buf.offset),
 					<void *>(ob2.offset + ob2.data[n].buf.offset),
-					_getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
+					getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
 				return False
 		return True
 	elif op == 3:  # !=
