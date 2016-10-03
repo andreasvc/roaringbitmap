@@ -533,13 +533,13 @@ cdef class RoaringBitmap(object):
 		cdef size_t n, size, offset = sizeof(uint32_t)
 		self.clear()
 		self.size = (<uint32_t *>buf)[0]
-		tmp1 = realloc(self.keys, self.size * sizeof(uint16_t))
-		tmp2 = realloc(self.data, self.size * sizeof(Block))
+		self.capacity = max(self.size, INITCAPACITY)
+		tmp1 = realloc(self.keys, self.capacity * sizeof(uint16_t))
+		tmp2 = realloc(self.data, self.capacity * sizeof(Block))
 		if tmp1 is NULL or tmp2 is NULL:
 			raise MemoryError(self.size)
 		self.keys = <uint16_t *>tmp1
 		self.data = <Block *>tmp2
-		self.capacity = self.size = self.size
 		memcpy(self.keys, &(buf[offset]), self.size * sizeof(uint16_t))
 		offset += self.size * sizeof(uint16_t)
 		data = <Block *>&(buf[offset])
