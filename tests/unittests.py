@@ -642,6 +642,11 @@ class Test_roaringbitmap(object):
 		assert rb[0] == 0x10000
 		rb = RoaringBitmap(range(0x10010, 0x1ffff + 1))
 		assert rb[0] == 0x10010
+		l = list(range(1, 0xccbb))
+		l.extend(range(0xcccc, 0xfffc))
+		rb = RoaringBitmap(l)
+		for n in (0, 0xcccc, -1):
+			assert l[n] == rb[n], (n, l[n], rb[n])
 
 	def test_pickle(self, single):
 		for name, data in single:

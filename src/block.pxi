@@ -932,18 +932,19 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 		return self.buf.sparse[i]
 	elif self.state == INVERTED:
 		size = BLOCKSIZE - self.cardinality
-		if size == 0 or self.buf.sparse[0] > i:
+		if size == 0:
 			return i
+		elif size == 1:
+			return i + (self.buf.sparse[0] <= i)
 		# find the pair of non-members between which the i'th member lies
 		# FIXME: use custom binary search
 		for n in range(1, size + 1):
 			# subtract n because this inverted block stores n non-members
 			if self.buf.sparse[n] - n > i:
-				# value at n - 1
-				w = self.buf.sparse[n - 1] - (n - 1)
 				# result lies between value at n-1 and n
 				# add rest of i not covered by values up to n-1
-				return w + (i - (n - 1)) + 1
+				w = self.buf.sparse[n - 1]
+				return w + (i - (w - (n - 1))) + 1
 		return self.buf.sparse[size - 1] + i + 1
 
 
