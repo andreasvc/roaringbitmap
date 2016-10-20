@@ -357,6 +357,10 @@ class Test_roaringbitmap(object):
 			rb._checkconsistency()
 			assert ref == rb, ('range(23, %d)' % n)
 
+	def test_inititerableallset(self):
+		rb = RoaringBitmap(list(range(0, 0xffff + 1)))
+		assert len(rb) == 0xffff + 1
+
 	def test_add(self, single):
 		for name, data in single:
 			ref = set()
@@ -608,6 +612,7 @@ class Test_roaringbitmap(object):
 				assert lrb[i] == ref[i], (name, i, len(ref))
 				assert rb.select(i) in rb, name
 				assert rb.select(i) == ref[i], name
+				assert rb[i] == ref[i], name
 				assert rb.rank(rb.select(i)) - 1 == i, name
 				if rb.select(i) + 1 in rb:
 					assert rb.rank(rb.select(i) + 1) - 1 == i + 1, name
@@ -629,6 +634,14 @@ class Test_roaringbitmap(object):
 			for k in range(0, 100000 // gap):
 				assert rb.select(k) == k * gap
 			gap *= 2
+
+	def test_select_issue15(self):
+		rb = RoaringBitmap(range(0x10000, 0x1ffff + 1))
+		assert rb[0] == 0x10000
+		rb.discard(0x10010)
+		assert rb[0] == 0x10000
+		rb = RoaringBitmap(range(0x10010, 0x1ffff + 1))
+		assert rb[0] == 0x10010
 
 	def test_pickle(self, single):
 		for name, data in single:

@@ -169,10 +169,10 @@ cdef class RoaringBitmap(object):
 		cdef RoaringBitmap ob
 		if isinstance(iterable, RANGE):
 			_,  (start, stop, step) = iterable.__reduce__()
-			if step == 1:
+			if 0 <= start < stop and step == 1:
 				self._initrange(start, stop)
 				return
-			# fall through
+			# fall through on non-trivial use of range()
 		if isinstance(iterable, (list, tuple, set, dict)):
 			self._init2pass(iterable)
 		elif isinstance(iterable, RoaringBitmap):
@@ -471,14 +471,13 @@ cdef class RoaringBitmap(object):
 	def __repr__(self):
 		return 'RoaringBitmap(%s)' % str(self)
 
-	def debuginfo(self):
+	def debuginfo(self, verbose=False):
 		"""Return a string with the internal representation of this set."""
 		cdef Block b1
 		return 'keys=%d, cap=%d, data={%s}' % (
-				self.size, self.capacity,
-				', '.join([block_repr(self.keys[n],
-					self._getblk(n, &b1))
-				for n in range(self.size)]))
+				self.size, self.capacity, ', '.join([
+					block_repr(self.keys[n], self._getblk(n, &b1), verbose)
+					for n in range(self.size)]))
 
 	def _keys(self):
 		return [self.keys[n] for n in range(self.size)]
@@ -815,7 +814,7 @@ cdef class RoaringBitmap(object):
 		if isinstance(i, slice):
 			return self.intersection(self._slice(i))
 		elif isinstance(i, (int, long)):
-			return self._ridx(i)
+			return self.select(self._ridx(i))
 		else:
 			raise TypeError('Expected integer index or slice object.')
 
@@ -847,18 +846,20 @@ cdef class RoaringBitmap(object):
 	def _initrange(self, uint32_t start, uint32_t stop):
 		cdef Block *block = NULL
 		cdef uint16_t key
+		cdef uint16_t firstkey = highbits(start)
+		cdef uint16_t lastkey = highbits(stop - 1)
 		# first block
-		block = self._insertempty(self.size, highbits(start))
+		block = self._insertempty(self.size, firstkey)
 		block_initrange(block, lowbits(start),
-				lowbits(stop) if highbits(start) == highbits(stop)
+				lowbits(stop) if firstkey == lastkey and lowbits(stop)
 				else BLOCKSIZE)
 		# middle blocks
-		for key in range(highbits(start) + 1, highbits(stop)):
+		for key in range(firstkey + 1, lastkey):
 			block = self._insertempty(self.size, key)
 			block_initrange(block, 0, BLOCKSIZE)
 		# last block
-		if self.keys[self.size - 1] != highbits(stop):
-			block = self._insertempty(self.size, highbits(stop))
+		if self.keys[self.size - 1] != lastkey:
+			block = self._insertempty(self.size, lastkey)
 			block_initrange(block, 0, lowbits(stop))
 
 	def _init2pass(self, iterable):
@@ -877,11 +878,11 @@ cdef class RoaringBitmap(object):
 				else:
 					block = &(self.data[i])
 				prev = key
-			block.capacity += 1
+			block.capacity += 1  # NB: wraps to 0 for block with all elements set
 		# allocate blocks
 		for i in range(<int>self.size):
 			block = &(self.data[i])
-			if block.capacity < MAXARRAYLENGTH:
+			if 0 < block.capacity < MAXARRAYLENGTH:
 				block.buf.sparse = allocsparse(block.capacity)
 				block.state = POSITIVE
 			else:  # if necessary, will convert to inverted later

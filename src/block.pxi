@@ -932,12 +932,19 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 		return self.buf.sparse[i]
 	elif self.state == INVERTED:
 		size = BLOCKSIZE - self.cardinality
-		if size == 0:
+		if size == 0 or self.buf.sparse[0] > i:
 			return i
-		for n in range(size):
-			if self.buf.sparse[n] - n >= i:
-				return self.buf.sparse[n] - i - n
-		return self.buf.sparse[size - 1] + i - size
+		# find the pair of non-members between which the i'th member lies
+		# FIXME: use custom binary search
+		for n in range(1, size + 1):
+			# subtract n because this inverted block stores n non-members
+			if self.buf.sparse[n] - n > i:
+				# value at n - 1
+				w = self.buf.sparse[n - 1] - (n - 1)
+				# result lies between value at n-1 and n
+				# add rest of i not covered by values up to n-1
+				return w + (i - (n - 1)) + 1
+		return self.buf.sparse[size - 1] + i + 1
 
 
 cdef Block *block_copy(Block *dest, Block *src) nogil:
@@ -949,15 +956,19 @@ cdef Block *block_copy(Block *dest, Block *src) nogil:
 	return dest
 
 
-cdef str block_repr(uint16_t key, Block *self):
+cdef str block_repr(uint16_t key, Block *self, verbose):
+	verbosestr = ''
+	if verbose and self.state in (POSITIVE, INVERTED):
+		verbosestr = ', data=[%s]' % ', '.join([
+				str(self.buf.sparse[n]) for n in range(getsize(self))])
 	if self.state == DENSE:
 		return 'D(key=%d, bits=%d, cap=%d)' % (key, self.cardinality, BLOCKSIZE)
 	elif self.state == POSITIVE:
-		return 'P(key=%d, ints=%d, cap=%d)' % (
-				key, self.cardinality, self.capacity)
+		return 'P(key=%d, ints=%d, cap=%d%s)' % (
+				key, self.cardinality, self.capacity, verbosestr)
 	elif self.state == INVERTED:
-		return 'I(key=%d, ints=%d, cap=%d)' % (
-				key, BLOCKSIZE - self.cardinality, self.capacity)
+		return 'I(key=%d, ints=%d, cap=%d%s)' % (
+				key, BLOCKSIZE - self.cardinality, self.capacity, verbosestr)
 	else:
 		raise ValueError('repr: illegal block state=%d, key=%d, crd=%d, cap=%d'
 				% (self.state, key, self.cardinality, self.capacity))
