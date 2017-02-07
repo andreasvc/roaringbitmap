@@ -100,6 +100,21 @@ class Test_multirb(object):
 				for i, j in zip(indices1, indices2)])
 		assert res == ref
 
+	def test_andor_len_pairwise(self, multi):
+		mrb = MultiRoaringBitmap([ImmutableRoaringBitmap(a) for a in multi])
+		indices1 = array.array(b'L' if PY2 else 'L', [0, 6, 8])
+		indices2 = array.array(b'L' if PY2 else 'L', [1, 7, 6])
+		res1 = array.array(b'L' if PY2 else 'L', [0] * len(indices1))
+		res2 = array.array(b'L' if PY2 else 'L', [0] * len(indices1))
+		mrb.andor_len_pairwise(indices1, indices2, res1, res2)
+		ref1 = array.array(b'L' if PY2 else 'L')
+		ref2 = array.array(b'L' if PY2 else 'L')
+		for i, j in zip(indices1, indices2):
+			ref1.append(len(mrb[i] & mrb[j]))
+			ref2.append(len(mrb[i] | mrb[j]))
+		assert res1 == ref1
+		assert res2 == ref2
+
 	def test_clamp(self, multi):
 		a, b = sorted(random.sample(multi[0], 2))
 		ref = set.intersection(

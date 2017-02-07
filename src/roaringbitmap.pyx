@@ -137,6 +137,7 @@ include "multirb.pxi"
 
 chararray = array.array(b'B' if PY2 else 'B')
 dblarray = array.array(b'd' if PY2 else 'd')
+longarray = array.array(b'L' if PY2 else 'L')
 RANGE = xrange if PY2 else range
 EMPTYIRB = ImmutableRoaringBitmap()
 

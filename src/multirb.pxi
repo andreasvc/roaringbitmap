@@ -219,6 +219,40 @@ cdef class MultiRoaringBitmap(object):
 				return None
 		return result
 
+	def andor_len_pairwise(self, array.array indices1, array.array indices2,
+			array.array resultand, array.array resultor):
+		"""Pairwise intersection/union cardinality for pairs of roaring bitmaps
+		in this collection given by ``zip(indices1, indices2)``.
+
+		:param indices1, indices2, resultand, resultor: arrays of type 'L', all
+			same length / preallocated; result arrays need not be initialized.
+
+		>>> result1 = array.array('L', [0] * 3)
+		>>> result2 = array.array('L', [0] * 3)
+		>>> mrb.intersection_card_pairwise(array.array('L', [0, 6, 8]),
+		...			array.array('L', [1, 7, 6]), result1, result2)
+		>>> result1
+		array.array('L', [3, 2, 56])
+		>>> result2
+		array.array('L', [6, 4, 123])
+		"""
+		cdef char *ptr = <char *>self.ptr
+		cdef int i, j, n, lenindices1 = len(indices1)
+		cdef ImmutableRoaringBitmap ob1, ob2
+		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		ob2 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		with nogil:
+			for n in range(lenindices1):
+				i, j = indices1.data.as_ulongs[n], indices2.data.as_ulongs[n]
+				ob1._setptr(&(ptr[self.offsets[i]]), self.sizes[i])
+				ob2._setptr(&(ptr[self.offsets[j]]), self.sizes[j])
+				if self.sizes[i] and self.sizes[j]:
+					rb_andor_len(ob1, ob2, &(resultand.data.as_ulongs[n]),
+							&(resultor.data.as_ulongs[n]))
+				else:
+					resultand.data.as_ulongs[n] = 0
+					resultor.data.as_ulongs[n] = 0
+
 	def jaccard_dist(self, array.array indices1, array.array indices2):
 		"""Compute the Jaccard distances for pairs of roaring bitmaps
 		in this collection given by ``zip(indices1, indices2)``.
