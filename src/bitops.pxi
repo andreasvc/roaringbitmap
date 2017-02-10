@@ -338,3 +338,39 @@ cdef inline int select16(uint16_t w, int i) except -1:
 			return counter
 	raise IndexError('select16: index %d out of range 0..%d.' % (
 			i, bit_popcount(w)))
+
+
+cdef inline void setbitcard(uint64_t *bitmap, uint16_t elem,
+		uint32_t *cardinality) nogil:
+	"""Set bit and update cardinality without branch."""
+	cdef uint32_t i
+	cdef uint64_t ow, nw
+	i = BITSLOT(elem)
+	ow = bitmap[i]
+	nw = ow | BITMASK(elem)
+	cardinality[0] += (ow ^ nw) >> (elem % BITSIZE)
+	bitmap[i] = nw
+
+
+cdef inline void clearbitcard(uint64_t *bitmap, uint16_t elem,
+		uint32_t *cardinality) nogil:
+	"""Clear bit and update cardinality without branch."""
+	cdef uint32_t i
+	cdef uint64_t ow, nw
+	i = BITSLOT(elem)
+	ow = bitmap[i]
+	nw = ow & ~BITMASK(elem)
+	cardinality[0] -= (ow ^ nw) >> (elem % BITSIZE)
+	bitmap[i] = nw
+
+
+cdef inline void togglebitcard(uint64_t *bitmap, uint16_t elem,
+		uint32_t *cardinality) nogil:
+	"""Flip bit and update cardinality without branch."""
+	cdef uint32_t i
+	cdef uint64_t ow, nw
+	i = BITSLOT(elem)
+	ow = bitmap[i]
+	nw = ow ^ BITMASK(elem)
+	cardinality[0] += (nw >> (elem % BITSIZE)) - (ow >> (elem % BITSIZE))
+	bitmap[i] = nw

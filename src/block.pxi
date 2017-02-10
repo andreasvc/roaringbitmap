@@ -14,9 +14,7 @@ cdef inline bint block_contains(Block *self, uint16_t elem) nogil:
 cdef inline void block_add(Block *self, uint16_t elem) nogil:
 	cdef int i
 	if self.state == DENSE:
-		if not TESTBIT(self.buf.dense, elem):
-			SETBIT(self.buf.dense, elem)
-			self.cardinality += 1
+		setbitcard(self.buf.dense, elem, &self.cardinality)
 	elif self.state == POSITIVE:
 		i = binarysearch(self.buf.sparse, 0, self.cardinality, elem)
 		if i < 0:
@@ -31,10 +29,8 @@ cdef inline void block_add(Block *self, uint16_t elem) nogil:
 cdef inline void block_discard(Block *self, uint16_t elem) nogil:
 	cdef int i
 	if self.state == DENSE:
-		if TESTBIT(self.buf.dense, elem):
-			CLEARBIT(self.buf.dense, elem)
-			self.cardinality -= 1
-			block_convert(self)
+		clearbitcard(self.buf.dense, elem, &self.cardinality)
+		block_convert(self)
 	elif self.state == POSITIVE:
 		i = binarysearch(self.buf.sparse, 0, self.cardinality, elem)
 		if i >= 0:
@@ -196,7 +192,7 @@ cdef void block_clamp(Block *result, Block *src, uint16_t start, uint32_t stop):
 
 cdef void block_and(Block *result, Block *self, Block *other) nogil:
 	"""Non-inplace intersection; result may be preallocated."""
-	cdef uint32_t n, alloc, dummy = 0, length = 0
+	cdef uint32_t n, alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		convertalloc(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 		result.cardinality = bitsetintersect(
@@ -259,7 +255,7 @@ cdef void block_and(Block *result, Block *self, Block *other) nogil:
 
 cdef void block_or(Block *result, Block *self, Block *other) nogil:
 	"""Non-inplace union; result may be preallocated."""
-	cdef uint32_t alloc, dummy = 0, length = 0
+	cdef uint32_t alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		convertalloc(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 		result.cardinality = bitsetunion(result.buf.dense,
@@ -338,12 +334,8 @@ cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 		for n in range(self.cardinality):
 			SETBIT(result.buf.dense, self.buf.sparse[n])
 		for n in range(<size_t>(BLOCKSIZE - other.cardinality)):
-			if TESTBIT(result.buf.dense, other.buf.sparse[n]):
-				CLEARBIT(result.buf.dense, other.buf.sparse[n])
-				result.cardinality -= 1
-			else:
-				SETBIT(result.buf.dense, other.buf.sparse[n])
-				result.cardinality += 1
+			togglebitcard(
+					result.buf.dense, other.buf.sparse[n], &result.cardinality)
 		block_convert(result)
 	elif self.state == INVERTED and other.state == POSITIVE:
 		block_xor(result, other, self)
@@ -359,7 +351,7 @@ cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 
 cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 	"""Non-inplace subtract; result may be preallocated."""
-	cdef uint32_t n, alloc, dummy = 0, length = 0
+	cdef uint32_t n, alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		convertalloc(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 		result.cardinality = bitsetsubtract(result.buf.dense,
@@ -426,7 +418,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 
 cdef void block_iand(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef uint32_t n, alloc, dummy = 0, length = 0
+	cdef uint32_t n, alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		self.cardinality = bitsetintersect(
 					self.buf.dense, self.buf.dense, other.buf.dense)
@@ -453,9 +445,8 @@ cdef void block_iand(Block *self, Block *other) nogil:
 		trimcapacity(self, self.cardinality)
 	elif self.state == DENSE and other.state == INVERTED:
 		for n in range(BLOCKSIZE - other.cardinality):
-			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
-				CLEARBIT(self.buf.dense, other.buf.sparse[n])
-				self.cardinality -= 1
+			clearbitcard(
+					self.buf.dense, other.buf.sparse[n], &self.cardinality)
 	elif self.state == POSITIVE and other.state == DENSE:
 		for n in range(self.cardinality):
 			if TESTBIT(other.buf.dense, self.buf.sparse[n]):
@@ -511,23 +502,19 @@ cdef void block_iand(Block *self, Block *other) nogil:
 
 cdef void block_ior(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef uint32_t n, alloc, dummy = 0, length = 0
+	cdef uint32_t n, alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
 		self.cardinality = bitsetunion(
 				self.buf.dense, self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
 		for n in range(other.cardinality):
-			if not TESTBIT(self.buf.dense, other.buf.sparse[n]):
-				SETBIT(self.buf.dense, other.buf.sparse[n])
-				self.cardinality += 1
+			setbitcard(self.buf.dense, other.buf.sparse[n], &self.cardinality)
 	elif self.state == POSITIVE and other.state == DENSE:
 		buf.dense = allocdense()
 		memcpy(buf.dense, other.buf.dense, BITMAPSIZE)
 		length = other.cardinality
 		for n in range(self.cardinality):
-			if not TESTBIT(buf.dense, self.buf.sparse[n]):
-				SETBIT(buf.dense, self.buf.sparse[n])
-				length += 1
+			setbitcard(buf.dense, self.buf.sparse[n], &length)
 		replacearray(self, buf, BITMAPSIZE // sizeof(uint16_t))
 		self.state = DENSE
 		self.cardinality = length
@@ -603,12 +590,8 @@ cdef void block_ixor(Block *self, Block *other) nogil:
 				self.buf.dense, self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
 		for n in range(other.cardinality):
-			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
-				CLEARBIT(self.buf.dense, other.buf.sparse[n])
-				self.cardinality -= 1
-			else:
-				SETBIT(self.buf.dense, other.buf.sparse[n])
-				self.cardinality += 1
+			togglebitcard(
+					self.buf.dense, other.buf.sparse[n], &self.cardinality)
 	elif self.state == DENSE and other.state == INVERTED:
 		buf.dense = allocdense()
 		memset(buf.dense, 255, BITMAPSIZE)
@@ -642,7 +625,7 @@ cdef void block_ixor(Block *self, Block *other) nogil:
 
 cdef void block_isub(Block *self, Block *other) nogil:
 	cdef Buffer buf
-	cdef uint32_t n, alloc, dummy = 0, length = 0,
+	cdef uint32_t n, alloc, length = 0,
 	if self.state == INVERTED and other.state == DENSE:
 		block_todense(self)
 	# fall through
@@ -651,10 +634,8 @@ cdef void block_isub(Block *self, Block *other) nogil:
 				self.buf.dense, self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
 		for n in range(other.cardinality):
-			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
-				CLEARBIT(self.buf.dense,
-						other.buf.sparse[n])
-				self.cardinality -= 1
+			clearbitcard(
+					self.buf.dense, other.buf.sparse[n], &self.cardinality)
 	elif self.state == DENSE and other.state == INVERTED:
 		alloc = BLOCKSIZE - other.cardinality
 		buf.sparse = allocsparse(alloc)
@@ -797,7 +778,7 @@ cdef bint block_isdisjoint(Block *self, Block *other) nogil:
 
 cdef uint32_t block_andlen(Block *self, Block *other) nogil:
 	"""Cardinality of intersection."""
-	cdef uint32_t n, dummy = 0, result = 0
+	cdef uint32_t n, result = 0
 	if self.state == DENSE and other.state == DENSE:
 		return bitsetintersectcount(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == POSITIVE:
