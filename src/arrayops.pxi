@@ -135,25 +135,43 @@ cdef inline int intersectgalloping(
 	cdef int k1 = 0, k2 = 0, pos = 0
 	if lensmall == 0:
 		return 0
-	while True:
-		if large[k1] < small[k2]:
-			k1 = advance(large, k1, lenlarge, small[k2])
-			if k1 == lenlarge:
-				return pos
-		if small[k2] < large[k1]:
-			k2 += 1
-			if k2 == lensmall:
-				return pos
-		else:  # large[k2] == small[k1]
-			if dest is not NULL:
+	if dest is NULL:  # cardinality only
+		while True:
+			if large[k1] < small[k2]:
+				k1 = advance(large, k1, lenlarge, small[k2])
+				if k1 == lenlarge:
+					return pos
+			if small[k2] < large[k1]:
+				k2 += 1
+				if k2 == lensmall:
+					return pos
+			else:  # large[k2] == small[k1]
+				pos += 1
+				k2 += 1
+				if k2 == lensmall:
+					return pos
+				k1 = advance(large, k1, lenlarge, small[k2])
+				if k1 == lenlarge:
+					return pos
+	else:  # store result
+		while True:
+			if large[k1] < small[k2]:
+				k1 = advance(large, k1, lenlarge, small[k2])
+				if k1 == lenlarge:
+					return pos
+			if small[k2] < large[k1]:
+				k2 += 1
+				if k2 == lensmall:
+					return pos
+			else:  # large[k2] == small[k1]
 				dest[pos] = small[k2]
-			pos += 1
-			k2 += 1
-			if k2 == lensmall:
-				return pos
-			k1 = advance(large, k1, lenlarge, small[k2])
-			if k1 == lenlarge:
-				return pos
+				pos += 1
+				k2 += 1
+				if k2 == lensmall:
+					return pos
+				k1 = advance(large, k1, lenlarge, small[k2])
+				if k1 == lenlarge:
+					return pos
 
 
 cdef int union2by2(uint16_t *data1, uint16_t *data2,
@@ -169,29 +187,45 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 		return length2
 	elif length1 > length2:
 		return union2by2(data2, data1, length2, length1, dest)
-	while True:
-		if data1[k1] < data2[k2]:
-			if dest is not NULL:
+	if dest is NULL:  # cardinality only
+		while True:
+			if data1[k1] < data2[k2]:
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					break
+			elif data1[k1] > data2[k2]:
+				pos += 1
+				k2 += 1
+				if k2 >= length2:
+					break
+			else:  # data1[k1] == data2[k2]
+				pos += 1
+				k1 += 1
+				k2 += 1
+				if k1 >= length1 or k2 >= length2:
+					break
+	else:  # store result
+		while True:
+			if data1[k1] < data2[k2]:
 				dest[pos] = data1[k1]
-			pos += 1
-			k1 += 1
-			if k1 >= length1:
-				break
-		elif data1[k1] > data2[k2]:
-			if dest is not NULL:
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					break
+			elif data1[k1] > data2[k2]:
 				dest[pos] = data2[k2]
-			pos += 1
-			k2 += 1
-			if k2 >= length2:
-				break
-		else:  # data1[k1] == data2[k2]
-			if dest is not NULL:
+				pos += 1
+				k2 += 1
+				if k2 >= length2:
+					break
+			else:  # data1[k1] == data2[k2]
 				dest[pos] = data1[k1]
-			pos += 1
-			k1 += 1
-			k2 += 1
-			if k1 >= length1 or k2 >= length2:
-				break
+				pos += 1
+				k1 += 1
+				k2 += 1
+				if k1 >= length1 or k2 >= length2:
+					break
 	if k1 < length1:
 		n_elems = length1 - k1
 		if dest is not NULL:
@@ -205,6 +239,20 @@ cdef int union2by2(uint16_t *data1, uint16_t *data2,
 	return pos
 
 
+cdef int union2by2bitmap(uint16_t *data1, uint16_t *data2,
+		int length1, int length2, uint64_t *dest) nogil:
+	"""Like union2by2, but write result to bitmap."""
+	cdef int length = 0, pos = 0
+	memset(dest, 0, BITMAPSIZE)
+	for pos in range(length1):
+		SETBIT(dest, data1[pos])
+	length = length1
+	for pos in range(length2):
+		length += TESTBIT(dest, data2[pos]) == 0
+		SETBIT(dest, data2[pos])
+	return length
+
+
 cdef int difference(uint16_t *data1, uint16_t *data2,
 		int length1, int length2, uint16_t *dest) nogil:
 	cdef int k1 = 0, k2 = 0, pos = 0
@@ -214,30 +262,50 @@ cdef int difference(uint16_t *data1, uint16_t *data2,
 		return length1
 	elif length1 == 0:
 		return 0
-	while True:
-		if data1[k1] < data2[k2]:
-			if dest is not NULL:
-				dest[pos] = data1[k1]
+	if dest is NULL:  # cardinality only
+		while True:
+			if data1[k1] < data2[k2]:
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					return pos
+			elif data1[k1] == data2[k2]:
+				k1 += 1
+				k2 += 1
+				if k1 >= length1:
+					return pos
+				elif k2 >= length2:
+					break
+			else:  # data1[k1] > data2[k2]
+				k2 += 1
+				if k2 >= length2:
+					break
+		while k1 < length1:
 			pos += 1
 			k1 += 1
-			if k1 >= length1:
-				return pos
-		elif data1[k1] == data2[k2]:
-			k1 += 1
-			k2 += 1
-			if k1 >= length1:
-				return pos
-			elif k2 >= length2:
-				break
-		else:  # data1[k1] > data2[k2]
-			k2 += 1
-			if k2 >= length2:
-				break
-	while k1 < length1:
-		if dest is not NULL:
+	else:  # store result
+		while True:
+			if data1[k1] < data2[k2]:
+				dest[pos] = data1[k1]
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					return pos
+			elif data1[k1] == data2[k2]:
+				k1 += 1
+				k2 += 1
+				if k1 >= length1:
+					return pos
+				elif k2 >= length2:
+					break
+			else:  # data1[k1] > data2[k2]
+				k2 += 1
+				if k2 >= length2:
+					break
+		while k1 < length1:
 			dest[pos] = data1[k1]
-		pos += 1
-		k1 += 1
+			pos += 1
+			k1 += 1
 	return pos
 
 
@@ -252,38 +320,60 @@ cdef int xor2by2(uint16_t *data1, uint16_t *data2,
 		if dest is not NULL:
 			memcpy(<void *>dest, <void *>data2, length2 * sizeof(uint16_t))
 		return length2
-	while True:
-		if data1[k1] < data2[k2]:
-			if dest is not NULL:
+	if dest is NULL:  # cardinality only
+		while True:
+			if data1[k1] < data2[k2]:
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					break
+			elif data1[k1] == data2[k2]:
+				k1 += 1
+				k2 += 1
+				if k1 >= length1 or k2 >= length2:
+					break
+			else:  # data1[k1] > data2[k2]
+				pos += 1
+				k2 += 1
+				if k2 >= length2:
+					break
+		if k1 >= length1:
+			while k2 < length2:
+				pos += 1
+				k2 += 1
+		elif k2 >= length2:
+			while k1 < length1:
+				pos += 1
+				k1 += 1
+	else:  # store result
+		while True:
+			if data1[k1] < data2[k2]:
 				dest[pos] = data1[k1]
-			pos += 1
-			k1 += 1
-			if k1 >= length1:
-				break
-		elif data1[k1] == data2[k2]:
-			k1 += 1
-			k2 += 1
-			if k1 >= length1 or k2 >= length2:
-				break
-		else:  # data1[k1] > data2[k2]
-			if dest is not NULL:
+				pos += 1
+				k1 += 1
+				if k1 >= length1:
+					break
+			elif data1[k1] == data2[k2]:
+				k1 += 1
+				k2 += 1
+				if k1 >= length1 or k2 >= length2:
+					break
+			else:  # data1[k1] > data2[k2]
 				dest[pos] = data2[k2]
-			pos += 1
-			k2 += 1
-			if k2 >= length2:
-				break
-	if k1 >= length1:
-		while k2 < length2:
-			if dest is not NULL:
+				pos += 1
+				k2 += 1
+				if k2 >= length2:
+					break
+		if k1 >= length1:
+			while k2 < length2:
 				dest[pos] = data2[k2]
-			pos += 1
-			k2 += 1
-	elif k2 >= length2:
-		while k1 < length1:
-			if dest is not NULL:
+				pos += 1
+				k2 += 1
+		elif k2 >= length2:
+			while k1 < length1:
 				dest[pos] = data1[k1]
-			pos += 1
-			k1 += 1
+				pos += 1
+				k1 += 1
 	return pos
 
 
