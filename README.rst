@@ -72,60 +72,57 @@ Output of ``$ make bench``::
     small sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                     set()  RoaringBitmap()    ratio
-    init         0.000838          0.00231    0.362
-    initsort     0.000847          0.00126    0.675
-    and           0.00104         0.000141     7.36
-    or            0.00172         0.000188     9.13
-    xor           0.00152         0.000235     6.46
-    sub          0.000956         0.000172     5.57
-    iand         1.29e-05         3.46e-06     3.72
-    ior          9.63e-06          3.6e-06     2.67
-    ixor         9.07e-06          3.7e-06     2.45
-    isub         7.09e-06         3.22e-06      2.2
-    eq           0.000451         1.13e-05     40.1
-    neq          6.32e-06         8.54e-06     0.74
-    jaccard       0.00278         0.000155       18
+    init         0.000834          0.00138    0.603
+    initsort      0.00085         0.000394     2.16
+    and           0.00102         8.49e-05     12.1
+    or            0.00171         0.000169     10.1
+    xor           0.00152         0.000213     7.11
+    sub          0.000934         0.000197     4.74
+    iand         1.29e-05         2.97e-06     4.35
+    ior           9.7e-06         3.26e-06     2.98
+    ixor         8.98e-06         3.43e-06     2.62
+    isub         6.83e-06          3.3e-06     2.07
+    eq           0.000438         1.17e-05     37.6
+    neq          6.37e-06         7.81e-06    0.816
+    jaccard        0.0029         0.000126     23.1
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                     set()  RoaringBitmap()    ratio
-    init            0.508             0.43     1.18
-    initsort        0.692            0.389     1.78
-    and             0.613         0.000309     1987
-    or              0.973         0.000317     3065
-    xor             0.891         0.000311     2864
-    sub             0.346         0.000313     1104
-    iand          0.00647         1.13e-05      575
-    ior           0.00599         1.22e-05      489
-    ixor          0.00417         1.31e-05      318
-    isub          0.00431         1.18e-05      363
-    eq             0.0982         0.000112      873
-    neq          9.87e-06         1.29e-05    0.763
-    jaccard          1.59         0.000315     5047
+    init            0.564            0.324     1.74
+    initsort        0.696            0.273     2.55
+    and             0.613         0.000418     1466
+    or              0.976         0.000292     3344
+    xor             0.955         0.000294     3250
+    sub             0.346         0.000316     1092
+    iand          0.00658         1.14e-05      575
+    ior           0.00594         1.08e-05      548
+    ixor          0.00434         1.12e-05      385
+    isub          0.00431         1.09e-05      397
+    eq             0.0991         0.000116      851
+    neq          9.62e-06         1.29e-05    0.743
+    jaccard          1.62          0.00025     6476
 
     dense set / high load factor
     100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
                     set()  RoaringBitmap()    ratio
-    init            0.313            0.114     2.75
-    initsort        0.341            0.199     1.71
-    and              0.23         0.000165     1394
-    or              0.453         0.000153     2958
-    xor              0.41         0.000174     2361
-    sub             0.168         0.000163     1030
-    iand          0.00288         5.95e-06      484
-    ior           0.00166         5.91e-06      281
-    ixor          0.00194         5.68e-06      342
-    isub           0.0017         6.48e-06      262
-    eq             0.0493         4.51e-05     1092
-    neq          9.85e-06          1.3e-05    0.759
-    jaccard         0.717         0.000154     4641
+    init             0.33           0.0775     4.26
+    initsort        0.352            0.148     2.38
+    and              0.24         0.000223     1078
+    or               0.45         0.000165     2734
+    xor             0.404         0.000161     2514
+    sub             0.169         0.000173      973
+    iand          0.00287         6.02e-06      477
+    ior           0.00179         6.34e-06      282
+    ixor          0.00195         5.53e-06      353
+    isub           0.0017         6.35e-06      267
+    eq             0.0486         4.65e-05     1045
+    neq          1.01e-05         1.13e-05    0.888
+    jaccard         0.722         0.000118     6136
 
 References
 ----------
-Samy Chambi, Daniel Lemire, Owen Kaser, Robert Godin (2014),
-Better bitmap performance with Roaring bitmaps,
-http://arxiv.org/abs/1402.6407
-
+- Samy Chambi, Daniel Lemire, Owen Kaser, Robert Godin (2014), Better bitmap
+  performance with Roaring bitmaps, http://arxiv.org/abs/1402.6407
 - http://roaringbitmap.org/
-- https://github.com/lemire/RoaringBitmap
 - https://issues.apache.org/jira/browse/LUCENE-5983
