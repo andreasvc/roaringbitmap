@@ -23,6 +23,10 @@ DEBUG = '--debug' in sys.argv
 if DEBUG:
 	sys.argv.remove('--debug')
 
+MTUNE = '--with-mtune' in sys.argv
+if MTUNE:
+        sys.argv.remove('--with-mtune')
+
 with open('README.rst') as inp:
 	README = inp.read()
 
@@ -73,16 +77,18 @@ if __name__ == '__main__':
 	# but this would lead to different C output for Python 2/3.
 	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
 			'-Wno-strict-prototypes', '-Wno-unreachable-code']
+	extra_link_args = []
 	if not DEBUG:
 		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
-		extra_link_args = ['-DNDEBUG']
+		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
+		extra_link_args += ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
 			directives.update(wraparound=True, boundscheck=True)
 			extra_compile_args += ['-g', '-O0',
 					# '-fsanitize=address', '-fsanitize=undefined',
 					'-fno-omit-frame-pointer']
-			extra_link_args = ['-g']
+			extra_link_args += ['-g']
 		ext_modules = cythonize(
 				[Extension(
 					'*',
