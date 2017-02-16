@@ -23,6 +23,10 @@ DEBUG = '--debug' in sys.argv
 if DEBUG:
 	sys.argv.remove('--debug')
 
+MTUNE = '--with-mtune' in sys.argv
+if MTUNE:
+        sys.argv.remove('--with-mtune')
+
 with open('README.rst') as inp:
 	README = inp.read()
 
@@ -76,6 +80,7 @@ if __name__ == '__main__':
         extra_link_args = []
 	if not DEBUG:
 		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
+                extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
 		extra_link_args += ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
