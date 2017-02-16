@@ -77,10 +77,10 @@ if __name__ == '__main__':
 	# but this would lead to different C output for Python 2/3.
 	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
 			'-Wno-strict-prototypes', '-Wno-unreachable-code']
-        extra_link_args = []
+	extra_link_args = []
 	if not DEBUG:
 		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
-                extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
+		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
 		extra_link_args += ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
