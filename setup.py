@@ -79,7 +79,7 @@ if __name__ == '__main__':
 			'-Wno-strict-prototypes', '-Wno-unreachable-code']
 	extra_link_args = []
 	if not DEBUG:
-		extra_compile_args += ['-O3', '-march=native', '-DNDEBUG']
+		extra_compile_args += ['-O3', '-DNDEBUG']
 		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
 		extra_link_args += ['-DNDEBUG']
 	if USE_CYTHON:
