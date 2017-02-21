@@ -260,12 +260,13 @@ cdef void block_or(Block *result, Block *self, Block *other) nogil:
 		block_convert(result)
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		alloc = self.cardinality + other.cardinality
-		if alloc > MAXARRAYLENGTH:
+		if alloc >= MAXARRAYLENGTH:
 			convertalloc(result, DENSE, BITMAPSIZE // sizeof(uint16_t))
 			result.cardinality = union2by2bitmap(
 					self.buf.sparse, other.buf.sparse,
 					self.cardinality, other.cardinality,
 					result.buf.dense)
+			block_convert(result)
 		else:
 			convertalloc(result, POSITIVE, alloc)
 			result.cardinality = union2by2(
@@ -273,7 +274,6 @@ cdef void block_or(Block *result, Block *self, Block *other) nogil:
 					self.cardinality, other.cardinality,
 					result.buf.sparse)
 			trimcapacity(result, result.cardinality)
-		block_convert(result)
 	elif self.state == INVERTED and other.state == INVERTED:
 		alloc = BLOCKSIZE - min(self.cardinality, other.cardinality)
 		alloc += OVERALLOC
@@ -547,13 +547,14 @@ cdef void block_ior(Block *self, Block *other) nogil:
 		trimcapacity(self, length)
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		alloc = self.cardinality + other.cardinality
-		if alloc > MAXARRAYLENGTH:
+		if alloc >= MAXARRAYLENGTH:
 			buf.dense = allocdense()
 			self.cardinality = union2by2bitmap(
 					self.buf.sparse, other.buf.sparse,
 					self.cardinality, other.cardinality,
 					buf.dense)
 			replacearray(self, buf, BITMAPSIZE // sizeof(uint16_t))
+			self.state = DENSE
 		else:
 			buf.sparse = allocsparse(alloc)
 			self.cardinality = union2by2(

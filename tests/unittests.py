@@ -676,3 +676,12 @@ class Test_roaringbitmap(object):
 			rb = RoaringBitmap([1, 2, 'a'])
 		with pytest.raises(TypeError):
 			RoaringBitmap([1, 2]) < [1, 2, 3]
+
+	def test_issue19(self):
+		a = RoaringBitmap()
+		b = RoaringBitmap(range(4095))
+		c = RoaringBitmap(range(2))
+		a |= b
+		a |= c
+		assert len(a -  b - c) == 0
+		assert len((b | c) - b - c) == 0
