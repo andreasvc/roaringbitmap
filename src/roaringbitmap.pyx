@@ -355,8 +355,8 @@ cdef class RoaringBitmap(object):
 
 	def __rshift__(self, int other):
 		# FIXME: replace with optimized implementation
-		return RoaringBitmap(elem + other for elem in self
-				if 0 <= elem + other < 1 << 32)
+		return RoaringBitmap([elem + other for elem in self
+				if 0 <= elem + other < 1 << 32])
 
 	# def __ilshift__(self, other):
 	# 	raise NotImplementedError
@@ -467,7 +467,7 @@ cdef class RoaringBitmap(object):
 		return <bint>self.size
 
 	def __str__(self):
-		return '{%s}' % ', '.join(str(a) for a in self)
+		return '{%s}' % ', '.join([str(a) for a in self])
 
 	def __repr__(self):
 		return 'RoaringBitmap(%s)' % str(self)
