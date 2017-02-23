@@ -18,8 +18,18 @@ and https://github.com/lemire/CRoaring
 Additional features of this implementation:
 
 - Blocks that are mostly full are stored compactly as an array of non-members
-  (instead of as an array of members or a fixed-size bitmap)
-- Collections of roaring bitmaps can be efficiently serialized with ``mmap``.
+  (instead of as an array of members or a fixed-size bitmap).
+  Based on https://issues.apache.org/jira/browse/LUCENE-5983
+- Collections of immutable roaring bitmaps can be efficiently serialized with
+  ``mmap`` in a single file.
+
+Missing features w.r.t. CRoaring:
+
+- Run-length encoded blocks
+- Various AVX2 / SSE optimizations
+
+See also PyRoaringBitmap, a Python wrapper of CRoaring:
+https://github.com/Ezibenroc/PyRoaringBitMap
 
 License, requirements
 ---------------------
@@ -120,9 +130,11 @@ Output of ``$ make bench``::
     neq          1.01e-05         1.13e-05    0.888
     jaccard         0.722         0.000118     6136
 
+See https://github.com/Ezibenroc/roaring_analysis/ for a performance comparison
+of PyRoaringBitmap and this library.
+
 References
 ----------
 - Samy Chambi, Daniel Lemire, Owen Kaser, Robert Godin (2014), Better bitmap
   performance with Roaring bitmaps, http://arxiv.org/abs/1402.6407
 - http://roaringbitmap.org/
-- https://issues.apache.org/jira/browse/LUCENE-5983
