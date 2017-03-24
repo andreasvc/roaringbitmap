@@ -1,13 +1,14 @@
 all:
-	python3 setup.py install --user --with-cython
+	python3 setup.py install --user
 
 clean:
-	rm -rf build/
+	rm -rf build/ src/roaringbitmap.h
 	find src/ -name '*.c' -delete
 	find src/ -name '*.so' -delete
 	find src/ -name '*.pyc' -delete
 	find src/ -name '*.html' -delete
-	rm -rf src/__pycache__
+	find tests/ -name '*.pyc' -delete
+	rm -rf src/__pycache__ tests/__pycache__
 
 test: all
 	ulimit -Sv 500000; python3 `which py.test` tests/unittests.py
@@ -21,7 +22,7 @@ lint:
 			src/*.pyx src/*.pxd src/*.pxi
 
 py2:
-	python2 setup.py install --user --with-cython
+	python2 setup.py install --user
 
 test2: py2
 	python2 `which py.test` tests/unittests.py
@@ -30,10 +31,10 @@ bench2: all
 	ulimit -Sv 500000; python2 tests/benchmarks.py
 
 debug:
-	python3-dbg setup.py install --user --with-cython --debug
+	python3-dbg setup.py install --user --debug
 
 debug2:
-	python2-dbg setup.py install --user --with-cython --debug
+	python2-dbg setup.py install --user --debug
 
 testdebug: debug
 	gdb -ex run --args python3-dbg `which py.test` tests/unittests.py -v
@@ -42,11 +43,11 @@ testdebug2: debug2
 	gdb -ex run --args python2-dbg `which py.test` tests/unittests.py -v
 
 testdebug35:
-	python3.5-dbg setup.py install --user --with-cython --debug && \
+	python3.5-dbg setup.py install --user --debug && \
 		gdb -ex run --args python3.5-dbg `which py.test` tests/unittests.py -v
 
 valgrind35:
-	python3.5-dbg setup.py install --user --with-cython --debug
+	python3.5-dbg setup.py install --user --debug
 	valgrind --tool=memcheck --suppressions=valgrind-python.supp \
 		--leak-check=full --show-leak-kinds=definite \
 		python3.5-dbg `which py.test` tests/unittests.py -v

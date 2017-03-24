@@ -5,11 +5,11 @@ from distutils.core import setup
 from distutils.extension import Extension
 
 PY2 = sys.version_info[0] == 2
-USE_CYTHON = '--with-cython' in sys.argv or not os.path.exists(
-		'src/roaringbitmap.c')
+
+# In releases, include C sources but not Cython sources; otherwise, use cython
+# to figure out which files may need to be re-cythonized.
+USE_CYTHON = os.path.exists('src/roaringbitmap.pyx')
 if USE_CYTHON:
-	if '--with-cython' in sys.argv:
-		sys.argv.remove('--with-cython')
 	try:
 		from Cython.Build import cythonize
 		from Cython.Distutils import build_ext
@@ -31,7 +31,7 @@ with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.5',
+		version='0.5.2',
 		description='Roaring Bitmap',
 		long_description=README,
 		author='Andreas van Cranenburgh',
