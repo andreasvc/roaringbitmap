@@ -1,3 +1,4 @@
+@cython.no_gc_clear
 cdef class MultiRoaringBitmap(object):
 	"""A sequence of immutable roaring bitmaps.
 
@@ -80,7 +81,8 @@ cdef class MultiRoaringBitmap(object):
 		releasebuf(&buffer)
 
 	def __dealloc__(self):
-		if isinstance(self.state, mmap.mmap):
+		"""Close opened file, if any."""
+		if hasattr(self.state, 'close'):
 			self.state.close()
 			if self.file is not None:
 				os.close(self.file)
