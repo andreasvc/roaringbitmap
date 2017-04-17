@@ -801,7 +801,9 @@ cdef class RoaringBitmap(object):
 		return i
 
 	def _slice(self, i):
-		# handle negative indices, step
+		# handle negative indices
+		if i.step != 1:
+			raise NotImplementedError
 		start = 0 if i.start is None else self._ridx(i.start)
 		stop = len(self) if i.stop is None else self._ridx(i.stop)
 		return RANGE(
