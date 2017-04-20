@@ -174,7 +174,7 @@ cdef class RoaringBitmap(object):
 				self._initrange(start, stop)
 				return
 			# fall through on non-trivial use of range()
-		if isinstance(iterable, (list, tuple, set, dict)):
+		if isinstance(iterable, (list, tuple, set, dict, RANGE)):
 			self._init2pass(iterable)
 		elif isinstance(iterable, RoaringBitmap):
 			ob = iterable
