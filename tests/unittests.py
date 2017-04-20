@@ -704,6 +704,16 @@ class Test_roaringbitmap(object):
 		del ref[::2]
 		assert list(rb) == ref
 
+	def test_minmax(self):
+		rb = RoaringBitmap(range(0, 61440))
+		assert rb.min() == 0
+		assert rb.max() == 61439
+		rb1 = RoaringBitmap(range(0, 61441))
+		assert rb1.min() == 0
+		assert rb1.max() == 61440
+		assert rb1[61440] == 61440
+		assert list(rb1)[61440] == 61440
+
 	def test_issue19(self):
 		a = RoaringBitmap()
 		b = RoaringBitmap(range(4095))
@@ -720,5 +730,14 @@ class Test_roaringbitmap(object):
 		assert len(rb - rb) == 0
 		assert len(rb1 ^ rb1) == 0
 		assert len(rb1 - rb1) == 0
+		assert len(~rb) == 0
+		assert len(~rb1) == 0
+
+		rb1 = RoaringBitmap(range(0, 61441))
+		assert len(rb ^ rb) == 0
 		rb1 ^= rb1
+		assert len(rb1) == 0
+
+		rb1 = RoaringBitmap(range(0, 61441))
+		rb1 -= rb1
 		assert len(rb1) == 0

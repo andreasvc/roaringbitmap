@@ -964,7 +964,7 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 			return i + (self.buf.sparse[0] <= i)
 		# find the pair of non-members between which the i'th member lies
 		# FIXME: use custom binary search
-		for n in range(1, size + 1):
+		for n in range(size):
 			# subtract n because this inverted block stores n non-members
 			if self.buf.sparse[n] - n > i:
 				# result lies between value at n-1 and n
