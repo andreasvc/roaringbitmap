@@ -372,6 +372,21 @@ class Test_roaringbitmap(object):
 			rb._checkconsistency()
 			assert ref == rb, ('range(23, %d)' % n)
 
+	def test_initrangestep(self):
+		# creates a positive, dense, and inverted block, respectively
+		for n in [400, 6000, 61241]:
+			for step in (2, 7, 113):
+				ref = set(range(23, n * step, step))
+				rb = RoaringBitmap(range(23, n * step, step))
+				rb._checkconsistency()
+				assert ref == rb, ('range(23, %d, %d)' % (n, step))
+		n = 100 * (1 << 16)
+		step = (1 << 16) + 7
+		ref = set(range(23, n, step))
+		rb = RoaringBitmap(range(23, n, step))
+		rb._checkconsistency()
+		assert ref == rb, ('range(23, %d, %d)' % (n, step))
+
 	def test_inititerableallset(self):
 		rb = RoaringBitmap(list(range(0, 0xffff + 1)))
 		assert len(rb) == 0xffff + 1
@@ -677,6 +692,18 @@ class Test_roaringbitmap(object):
 		with pytest.raises(TypeError):
 			RoaringBitmap([1, 2]) < [1, 2, 3]
 
+	def test_slices(self):  # issue 20
+		ref = list(range(10))
+		rb = RoaringBitmap(range(10))
+		assert list(rb[::2]) == ref[::2]
+		with pytest.raises(ValueError):
+			_ = rb[::-2]
+		with pytest.raises(ValueError):
+			_ = rb[::0]
+		del rb[::2]
+		del ref[::2]
+		assert list(rb) == ref
+
 	def test_issue19(self):
 		a = RoaringBitmap()
 		b = RoaringBitmap(range(4095))
@@ -685,3 +712,13 @@ class Test_roaringbitmap(object):
 		a |= c
 		assert len(a -  b - c) == 0
 		assert len((b | c) - b - c) == 0
+
+	def test_issue22(self):
+		rb = RoaringBitmap(range(0, 61440))
+		rb1 = RoaringBitmap(range(0, 61441))
+		assert len(rb ^ rb) == 0
+		assert len(rb - rb) == 0
+		assert len(rb1 ^ rb1) == 0
+		assert len(rb1 - rb1) == 0
+		rb1 ^= rb1
+		assert len(rb1) == 0

@@ -170,8 +170,8 @@ cdef class RoaringBitmap(object):
 		cdef RoaringBitmap ob
 		if isinstance(iterable, RANGE):
 			_,  (start, stop, step) = iterable.__reduce__()
-			if 0 <= start < stop and step == 1:
-				self._initrange(start, stop)
+			if 0 <= start < stop and step >= 1:
+				self._initrange(start, stop, step)
 				return
 			# fall through on non-trivial use of range()
 		if isinstance(iterable, (list, tuple, set, dict, RANGE)):
@@ -801,21 +801,25 @@ cdef class RoaringBitmap(object):
 		return i
 
 	def _slice(self, i):
-		# handle negative indices
-		if i.step != 1:
-			raise NotImplementedError
+		"""Return the range of values for a given a range of indices i."""
 		start = 0 if i.start is None else self._ridx(i.start)
 		stop = len(self) if i.stop is None else self._ridx(i.stop)
 		return RANGE(
-				self.select(start), self.select(stop - 1) + 1,
-				1 if i.step is None else i.step)
+				self.select(start), self.select(stop - 1) + 1)
 
 	def __getitem__(self, i):
 		"""Get element with rank `i`, or a slice.
 
 		In the case of a slice, a new roaringbitmap is returned."""
 		if isinstance(i, slice):
-			return self.intersection(self._slice(i))
+			if i.step is None or i.step == 1:
+				return self.intersection(self._slice(i))
+			elif i.step <= 0:
+				raise ValueError
+			else:  # i.step > 1  FIXME we could do better
+				start, stop, step = i.indices(len(self))
+				return RoaringBitmap(
+						[self[x] for x in RANGE(start, stop, step)])
 		elif isinstance(i, (int, long)):
 			return self.select(self._ridx(i))
 		else:
@@ -824,46 +828,40 @@ cdef class RoaringBitmap(object):
 	def __delitem__(self, i):
 		"""Discard element with rank `i`, or a slice."""
 		if isinstance(i, slice):
-			self.difference_update(self._slice(i))
+			if i.step is None or i.step == 1:
+				self.difference_update(self._slice(i))
+			elif i.step <= 0:
+				raise ValueError
+			else:  # i.step > 1  FIXME we could do better
+				start, stop, step = i.indices(len(self))
+				self.difference_update(RoaringBitmap([
+						self[x] for x in RANGE(start, stop, step)]))
 		elif isinstance(i, (int, long)):
 			self.discard(self.select(self._ridx(i)))
 		else:
 			raise TypeError('Expected integer index or slice object.')
 
-	def __setitem__(self, i, x):
-		"""Set element with rank `i` to ``False``.
-
-		Alternatively, set all elements within a range of ranks to
-		``True`` or ``False``."""
-		if isinstance(i, slice):
-			self.update(self._slice(i))
-		elif isinstance(i, (int, long)):
-			if bool(x):
-				raise NotImplementedError('use RoaringBitmap.add(x) to add an '
-						'element; The ith element is by definition '
-						'already in the set.')
-			self.__delitem__(self._ridx(i))
-		else:
-			raise TypeError('Expected integer index or slice object.')
-
-	def _initrange(self, uint32_t start, uint32_t stop):
+	def _initrange(self, uint32_t start, uint32_t stop, uint32_t step):
 		cdef Block *block = NULL
-		cdef uint16_t key
-		cdef uint16_t firstkey = highbits(start)
-		cdef uint16_t lastkey = highbits(stop - 1)
-		# first block
-		block = self._insertempty(self.size, firstkey)
-		block_initrange(block, lowbits(start),
-				lowbits(stop) if firstkey == lastkey and lowbits(stop)
-				else BLOCKSIZE)
-		# middle blocks
-		for key in range(firstkey + 1, lastkey):
+		cdef uint32_t key, blockstart, blockstop, gap
+		cdef uint32_t tmp = start
+		cdef uint64_t n
+		if step >= (1 << 16):
+			n = start
+			while n < stop:
+				self.add(n)
+				n += step
+			return
+		while True:
+			key = highbits(tmp)
+			blockstart = lowbits(tmp)
+			blockstop = min(stop - (key << 16), 1 << 16)
 			block = self._insertempty(self.size, key)
-			block_initrange(block, 0, BLOCKSIZE)
-		# last block
-		if self.keys[self.size - 1] != lastkey:
-			block = self._insertempty(self.size, lastkey)
-			block_initrange(block, 0, lowbits(stop))
+			block_initrange(block, blockstart, blockstop, step)
+			gap = blockstop - blockstart + step - 1
+			tmp += gap - (gap % step)
+			if tmp >= stop:
+				break
 
 	def _init2pass(self, iterable):
 		cdef Block *block = NULL
@@ -930,7 +928,7 @@ cdef class RoaringBitmap(object):
 				for n, elem in enumerate(values):
 					block.buf.sparse[n] = elem
 			elif block.cardinality == BLOCKSIZE:
-				block_initrange(block, 0, BLOCKSIZE)
+				block_initrange(block, 0, BLOCKSIZE, 1)
 			else:
 				block.capacity = BITMAPSIZE // sizeof(uint16_t)
 				block.buf.dense = allocdense()
