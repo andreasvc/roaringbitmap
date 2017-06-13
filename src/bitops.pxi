@@ -164,10 +164,11 @@ cdef inline int iteratesetbits(uint64_t *vec,
 		uint64_t *cur, int *idx) nogil:
 	"""Iterate over set bits in an array of unsigned long.
 
-	:param cur and idx: pointers to variables to maintain state,
-		``idx`` should be initialized to 0,
-		and ``cur`` to the first element of
+	:param cur: pointer to variable to maintain state,
+		``cur`` should be initialized to the first element of
 		the bit array ``vec``, i.e., ``cur = vec[idx]``.
+	:param idx: pointer to variable to maintain state,
+		``idx`` should be initialized to 0.
 	:returns: the index of a set bit, or -1 if there are no more set
 		bits. The result of calling a stopped iterator is undefined.
 
@@ -194,7 +195,10 @@ cdef inline int iterateunsetbits(uint64_t *vec,
 		uint64_t *cur, int *idx) nogil:
 	"""Like ``iteratesetbits``, but return indices of zero bits.
 
-	:param cur: should be initialized as: ``cur = ~vec[idx]``."""
+	:param cur: should be initialized as: ``cur = ~vec[idx]``.
+	:param idx: pointer to variables to maintain state,
+		``idx`` should be initialized to 0.
+	"""
 	cdef int tmp
 	while not cur[0]:
 		idx[0] += 1
@@ -210,11 +214,12 @@ cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur,
 		int *idx) nogil:
 	"""Iterate in reverse over set bits in an array of unsigned long.
 
-	:param cur and idx: pointers to variables to maintain state,
-		``idx`` should be initialized to ``slots - 1``, where slots is the
-		number of elements in unsigned long array ``vec``.
+	:param cur: pointer to variable to maintain state,
 		``cur`` should be initialized to the last element of
 		the bit array ``vec``, i.e., ``cur = vec[idx]``.
+	:param idx: pointer to variable to maintain state,
+		``idx`` should be initialized to ``slots - 1``, where slots is the
+		number of elements in unsigned long array ``vec``.
 	:returns: the index of a set bit, or -1 if there are no more set
 		bits. The result of calling a stopped iterator is undefined.
 

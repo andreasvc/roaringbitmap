@@ -233,15 +233,11 @@ cdef class RoaringBitmap(object):
 		return other.issubset(self)
 
 	def min(self):
-		"""Return smallest element in this RoaringBitmap.
-
-		NB: faster than min(self) which iterates over all elements."""
+		"""Return smallest element in this RoaringBitmap."""
 		return self.select(0)
 
 	def max(self):
-		"""Return largest element in this RoaringBitmap.
-
-		NB: faster than max(self) which iterates over all elements."""
+		"""Return largest element in this RoaringBitmap."""
 		return next(reversed(self))
 
 	def __and__(x, y):

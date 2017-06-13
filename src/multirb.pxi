@@ -179,11 +179,13 @@ cdef class MultiRoaringBitmap(object):
 		"""Compute intersection of given a list of indices of roaring bitmaps
 		in this collection.
 
+		:param start: optional start index.
+		:param stop: optional end index;
+			if given, only return elements `n` s.t. ``start <= n < stop``.
 		:returns: the intersection as a mutable RoaringBitmap.
 			Returns ``None`` when an invalid index is encountered or an empty
 			result is obtained.
-		:param start, stop: if given, only return elements `n`
-			s.t. ``start <= n < stop``."""
+		"""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef RoaringBitmap result
 		cdef char *ptr = <char *>self.ptr
@@ -226,8 +228,13 @@ cdef class MultiRoaringBitmap(object):
 		"""Pairwise intersection/union cardinality for pairs of roaring bitmaps
 		in this collection given by ``zip(indices1, indices2)``.
 
-		:param indices1, indices2, resultand, resultor: arrays of type 'L', all
-			same length / preallocated; result arrays need not be initialized.
+		:param indices1: input array
+		:param indices2: input array
+		:param resultand: result array
+		:param resultor: result array
+
+		All parameters should be Python arrays of type 'L', all preallocated
+		with the same length; result arrays need not be initialized.
 
 		>>> result1 = array.array('L', [0] * 3)
 		>>> result2 = array.array('L', [0] * 3)
@@ -263,9 +270,13 @@ cdef class MultiRoaringBitmap(object):
 		...			array.array('L', [1, 7, 6]))
 		array.array('d', [0.3, 0.2, 0.56])
 
-		:param indices1, indices2: arrays of unsigned long integers,
-			created with ``array.array('L')``. Ensure that all indices `i`
-			are in the range ``0 <= i < len(self)``.
+		:param indices1: input array
+		:param indices2: input array
+		:returns: a Python array of floats with the jaccard distances.
+
+		``indices1 and ``indices2`` should be arrays of unsigned long integers,
+		created with ``array.array('L')``. Ensure that all indices `i`
+		are in the range ``0 <= i < len(self)``.
 		"""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef array.array result = array.clone(dblarray, len(indices1), False)

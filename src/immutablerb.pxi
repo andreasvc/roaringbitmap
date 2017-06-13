@@ -100,18 +100,6 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		result.__setstate__(array.copy(self.__getstate__()))
 		return result
 
-	def add(self, uint32_t elem):
-		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
-
-	def discard(self, uint32_t elem):
-		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
-
-	def remove(self, uint32_t elem):
-		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
-
-	def pop(self):
-		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
-
 	def __iand__(self, x):
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
@@ -124,20 +112,42 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 	def __ixor__(self, x):
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
+	def add(self, uint32_t elem):
+		"""Unsupported method."""
+		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
+
+	def discard(self, uint32_t elem):
+		"""Unsupported method."""
+		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
+
+	def remove(self, uint32_t elem):
+		"""Unsupported method."""
+		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
+
+	def pop(self):
+		"""Unsupported method."""
+		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
+
 	def update(self, *bitmaps):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def intersection_update(self, *bitmaps):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def difference_update(self, *other):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def symmetric_difference_update(self, other):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def flip_range(self, start, stop):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def clear(self):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
