@@ -23,6 +23,9 @@ RoaringBitmap({5, 6, 7, 8, 9})
 
 ``ImmutableRoaringBitmap`` is an immutable variant (analogous to ``frozenset``)
 which is stored compactly as a contiguous block of memory.
+
+``MultiRoaringBitmap`` stores a sequence of immutable roaring bitmaps
+in an efficiently serializable, contiguous block of memory.
 """
 # TODOs
 # [ ] SSE/AVX2 intrinsics:
@@ -120,7 +123,7 @@ DEF MAXARRAYLENGTH = 1 << 12
 # Capacity (elements) to allocate for an empty array
 DEF INITCAPACITY = 4
 
-# extra elements in result to accomodate SSE/AVX vector operations
+# Extra elements in result to accomodate SSE/AVX vector operations
 DEF OVERALLOC = 8
 
 # The different ways a block may store its elements:
@@ -469,7 +472,8 @@ cdef class RoaringBitmap(object):
 		return 'RoaringBitmap(%s)' % str(self)
 
 	def debuginfo(self, verbose=False):
-		"""Return a string with the internal representation of this set."""
+		"""Return a string describing the internal representation of this set.
+		"""
 		cdef Block b1
 		return 'keys=%d, cap=%d, data={%s}' % (
 				self.size, self.capacity, ', '.join([
@@ -480,6 +484,7 @@ cdef class RoaringBitmap(object):
 		return [self.keys[n] for n in range(self.size)]
 
 	def __getstate__(self):
+		"""Return a serialized representation (Python array) for pickling."""
 		cdef array.array state
 		cdef Block *ob
 		cdef uint32_t extra, alignment = 32
@@ -522,6 +527,7 @@ cdef class RoaringBitmap(object):
 		return state
 
 	def __setstate__(self, array.array state):
+		"""Initialize this object with a serialized representation."""
 		cdef char *buf = state.data.as_chars
 		cdef void *tmp1
 		cdef void *tmp2

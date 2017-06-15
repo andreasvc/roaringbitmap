@@ -18,8 +18,8 @@ cdef class MultiRoaringBitmap(object):
 	cdef uint32_t *offsets  # byte offset in ptr for each roaring bitmap
 	cdef uint32_t *sizes  # the size in bytes of each roaring bitmap
 	cdef uint32_t *ptr  # the data
-	cdef object state  # array or mmap which should be kept alive for ptr
-	cdef object file
+	cdef object _ob  # array or mmap which should be kept alive for ptr
+	cdef object _file  # optionally, file with mmap to be kept open
 
 	def __init__(self, list init, filename=None):
 		"""
@@ -37,7 +37,7 @@ cdef class MultiRoaringBitmap(object):
 		cdef int result
 
 		if filename is not None:
-			self.file = os.open(filename, os.O_CREAT | os.O_RDWR)
+			self._file = os.open(filename, os.O_CREAT | os.O_RDWR)
 
 		tmp = [None if a is None else ImmutableRoaringBitmap(a) for a in init]
 		self.size = len(tmp)
@@ -50,11 +50,11 @@ cdef class MultiRoaringBitmap(object):
 				alloc += irb.bufsize
 
 		if filename is not None:
-			os.ftruncate(self.file, alloc)
-		self.state = mmap.mmap(
-				-1 if filename is None else self.file,
+			os.ftruncate(self._file, alloc)
+		self._ob = mmap.mmap(
+				-1 if filename is None else self._file,
 				alloc, access=mmap.ACCESS_WRITE)
-		result = getbufptr(self.state, &ptr, &size, &buffer)
+		result = getbufptr(self._ob, &ptr, &size, &buffer)
 		self.ptr = <uint32_t *>ptr
 		if result != 0:
 			raise ValueError('could not get buffer from mmap.')
@@ -77,21 +77,23 @@ cdef class MultiRoaringBitmap(object):
 			memcpy(&((<char *>self.ptr)[offset]), irb.ptr, irb.bufsize)
 			offset += irb.bufsize
 		if filename is not None:
-			self.state.flush()
+			self._ob.flush()
 		releasebuf(&buffer)
 
 	def __dealloc__(self):
 		"""Close opened file, if any."""
-		if hasattr(self.state, 'close'):
-			self.state.close()
-			if self.file is not None:
-				os.close(self.file)
+		if hasattr(self._ob, 'close'):
+			self._ob.close()
+			if self._file is not None:
+				os.close(self._file)
 
 	def __getstate__(self):
-		return bytes(self.state)
+		"""Return a serialized representation (Python array) for pickling."""
+		return bytes(self._ob)
 
 	def __setstate__(self, state):
-		self.state = state
+		"""Initialize this object with a serialized representation."""
+		self._ob = state
 		self.ptr = <uint32_t *><char *>state
 		self.size = self.ptr[0]
 		self.offsets = &(self.ptr[1])
@@ -105,9 +107,9 @@ cdef class MultiRoaringBitmap(object):
 		cdef char *ptr = NULL
 		cdef Py_ssize_t size = 0
 		ob = MultiRoaringBitmap.__new__(MultiRoaringBitmap)
-		ob.file = os.open(filename, os.O_RDONLY)
-		ob.state = mmap.mmap(ob.file, 0, access=mmap.ACCESS_READ)
-		result = getbufptr(ob.state, &ptr, &size, &buffer)
+		ob._file = os.open(filename, os.O_RDONLY)
+		ob._ob = mmap.mmap(ob._file, 0, access=mmap.ACCESS_READ)
+		result = getbufptr(ob._ob, &ptr, &size, &buffer)
 		ob.ptr = <uint32_t *>ptr
 		if result != 0:
 			raise ValueError('could not get buffer from mmap.')

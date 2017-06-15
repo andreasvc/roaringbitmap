@@ -17,9 +17,9 @@ and https://github.com/lemire/CRoaring
 
 Additional features of this implementation:
 
-- Blocks that are mostly full are stored compactly as an array of non-members
-  (instead of as an array of members or a fixed-size bitmap).
-  Based on https://issues.apache.org/jira/browse/LUCENE-5983
+- Inverted list representation: blocks that are mostly full are stored
+  compactly as an array of non-members (instead of as an array of members or a
+  fixed-size bitmap).
 - Collections of immutable roaring bitmaps can be efficiently serialized with
   ``mmap`` in a single file.
 
@@ -135,6 +135,17 @@ of PyRoaringBitmap and this library.
 
 References
 ----------
-- Samy Chambi, Daniel Lemire, Owen Kaser, Robert Godin (2014), Better bitmap
-  performance with Roaring bitmaps, http://arxiv.org/abs/1402.6407
 - http://roaringbitmap.org/
+- Chambi, S., Lemire, D., Kaser, O., & Godin, R. (2016). Better bitmap
+  performance with Roaring bitmaps. Software: practice and experience, 46(5),
+  pp. 709-719. http://arxiv.org/abs/1402.6407
+- The idea of using the inverted list representation is based on
+  https://issues.apache.org/jira/browse/LUCENE-5983
+
+  For a comparison of roaring bitmaps and inverted lists,
+  see the following paper (which however does not consider using both):
+
+  Wang, J., Lin, C., Papakonstantinou, Y., & Swanson, S. (2017, May). An
+  Experimental Study of Bitmap Compression vs. Inverted List Compression. In
+  Proceedings of the 2017 ACM International Conference on Management of Data
+  (pp. 993-1008). http://db.ucsd.edu/wp-content/uploads/2017/03/sidm338-wangA.pdf

@@ -2,12 +2,14 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 	"""A roaring bitmap that does not allow mutation operations.
 
 	Any operation resulting in a new roaring bitmap is returned as a mutable
-	RoaringBitmap. Stores data in one contiguous block of memory for efficient
-	serialization."""
-	cdef readonly object state  # object to be kept for ptr to remain valid
+	RoaringBitmap (except for ``freeze()`` and the ``ImmutableRoaringBitmap``
+	constructor). Stores data in one contiguous block of memory for efficient
+	serialization.
+	"""
+	cdef readonly object _ob  # object to be kept for ptr to remain valid
 	cdef char *ptr  # the data
 	cdef size_t bufsize  # length in bytes of data
-	cdef long _hash
+	cdef long _hash  # cached hash value, computed as needed
 
 	def __init__(self, iterable=None):
 		"""Return a new RoaringBitmap with elements from ``iterable``.
@@ -29,21 +31,21 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 			ob = ensurerb(iterable or ())
 			self.__setstate__(ob.__getstate__())
 
-	def __dealloc__(self):
-		pass  # nothing to declare
-
 	def __getstate__(self):
-		if self.state is None:
+		"""Return a serialized representation (Python array) for pickling."""
+		if self._ob is None:
 			state = array.clone(chararray, self.bufsize, False)
 			memcpy(state.data.as_chars, self.ptr, self.bufsize)
 			return state
-		return self.state
+		return self._ob
 
 	def __setstate__(self, array.array state):
-		"""`state` is a char array with the pickle format of RoaringBitmap.
-		Instead of copying this data, it will be used directly.
+		"""Initialize this object with a serialized representation.
+
+		:param state: a char array with the pickle format of RoaringBitmap.
+			Instead of copying this data, it will be used directly.
 		"""
-		self.state = state
+		self._ob = state
 		# FIXME: 32 byte alignment depends on state.data being aligned.
 		self._setptr(state.data.as_chars, len(state))
 
@@ -84,7 +86,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 
 	def __sizeof__(self):
 		"""Return memory usage in bytes."""
-		return len(self.state)
+		return len(self._ob)
 
 	def freeze(self):
 		"""Already immutable, return self."""
@@ -101,15 +103,19 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		return result
 
 	def __iand__(self, x):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def __isub__(self, x):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def __ior__(self, x):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def __ixor__(self, x):
+		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
 
 	def add(self, uint32_t elem):
