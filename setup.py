@@ -13,8 +13,8 @@ if USE_CYTHON:
 	try:
 		from Cython.Build import cythonize
 		from Cython.Distutils import build_ext
-                from Cython.Compiler import Options
-                Options.fast_fail = True
+		from Cython.Compiler import Options
+		Options.fast_fail = True
 	except ImportError:
 		raise RuntimeError('could not import Cython.')
 	cmdclass = dict(build_ext=build_ext)
