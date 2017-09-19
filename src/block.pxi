@@ -675,7 +675,7 @@ cdef void block_isub(Block *self, Block *other) nogil:
 	cdef uint16_t elem
 	if self.state == INVERTED and other.state == DENSE:
 		block_todense(self)
-	# fall through
+		# fall through, treat as DENSE - DENSE.
 	if self.state == DENSE and other.state == DENSE:
 		self.cardinality = bitsetsubtract(
 				self.buf.dense, self.buf.dense, other.buf.dense)
@@ -718,10 +718,13 @@ cdef void block_isub(Block *self, Block *other) nogil:
 		self.state = POSITIVE
 		trimcapacity(self, self.cardinality)
 	elif self.state == INVERTED and other.state == POSITIVE:
-		length = intersect2by2(
+		alloc = 2 * BLOCKSIZE - (self.cardinality + other.cardinality)
+		buf.sparse = allocsparse(alloc)
+		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
 				BLOCKSIZE - self.cardinality, other.cardinality,
-				self.buf.sparse)
+				buf.sparse)
+		replacearray(self, buf, alloc)
 		self.cardinality = BLOCKSIZE - length
 		trimcapacity(self, length)
 	elif self.state == POSITIVE and other.state == INVERTED:

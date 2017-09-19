@@ -741,3 +741,16 @@ class Test_roaringbitmap(object):
 		rb1 = RoaringBitmap(range(0, 61441))
 		rb1 -= rb1
 		assert len(rb1) == 0
+
+	def test_issue24(self):
+		r = RoaringBitmap(range(131071))
+		assert r.pop() == 131070
+		assert r.pop() == 131069
+
+		rr = r - RoaringBitmap([130752])
+		assert 130752 not in rr
+		assert rr.pop() == 131068
+
+		r.difference_update(RoaringBitmap([130752]))
+		assert 130752 not in r
+		assert r.pop() == 131068
