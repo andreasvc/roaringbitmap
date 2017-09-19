@@ -22,6 +22,7 @@ else:
 
 # (numitems, maxnum)
 PARAMS = [
+		('empty',        0, (1 << 16) - 1),
 		('positive',   200, (1 << 16) - 1),
 		('dense',     5000, (1 << 16) - 1),
 		('inverted',  5000, (1 << 16) - 1),
@@ -284,6 +285,8 @@ class Test_immutablerb(object):
 
 	def test_jaccard_dist(self, pair):
 		for name, data1, data2 in pair:
+			if len(data1) == 0 and len(data2) == 0:
+				continue
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
@@ -295,6 +298,8 @@ class Test_immutablerb(object):
 
 	def test_rank(self, single):
 		for name, data in single:
+			if len(data) == 0:
+				continue
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
 			for _ in range(10):
@@ -304,6 +309,8 @@ class Test_immutablerb(object):
 
 	def test_select(self, single):
 		for name, data in single:
+			if len(data) == 0:
+				continue
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
 			lrb = list(rb)
@@ -556,6 +563,8 @@ class Test_roaringbitmap(object):
 
 	def test_clamp(self, single):
 		for name, data in single:
+			if len(data) == 0:
+				continue
 			a, b = sorted(random.sample(data, 2))
 			ref = set(data).intersection(range(a, b))
 			rb = RoaringBitmap(data).intersection(range(a, b))
@@ -615,6 +624,8 @@ class Test_roaringbitmap(object):
 
 	def test_jaccard_dist(self, pair):
 		for name, data1, data2 in pair:
+			if len(data1) == 0 and len(data2) == 0:
+				continue
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
 			assert abs((len(ref & ref2) / float(len(ref | ref2)))
@@ -625,6 +636,8 @@ class Test_roaringbitmap(object):
 
 	def test_rank(self, single):
 		for name, data in single:
+			if len(data) == 0:
+				continue
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
 			for _ in range(10):
@@ -634,6 +647,8 @@ class Test_roaringbitmap(object):
 
 	def test_select(self, single):
 		for name, data in single:
+			if len(data) == 0:
+				continue
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
 			lrb = list(rb)

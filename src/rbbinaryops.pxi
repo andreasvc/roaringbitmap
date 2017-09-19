@@ -353,18 +353,18 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
 					break
-		if pos1 == ob1.size:
-			result._extendarray(ob2.size - pos2)
-			for pos2 in range(pos2, ob2.size):
-				result._insertcopy(
-						result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
-		elif pos2 == ob2.size:
-			result._extendarray(ob1.size - pos1)
-			for pos1 in range(pos1, ob1.size):
-				result._insertcopy(
-						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 		free(result.data[result.size].buf.ptr)
-		result._resize(result.size)
+	if pos1 == ob1.size:
+		result._extendarray(ob2.size - pos2)
+		for pos2 in range(pos2, ob2.size):
+			result._insertcopy(
+					result.size, ob2.keys[pos2], ob2._getblk(pos2, &b2))
+	elif pos2 == ob2.size:
+		result._extendarray(ob1.size - pos1)
+		for pos1 in range(pos1, ob1.size):
+			result._insertcopy(
+					result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
+	result._resize(result.size)
 	return result
 
 
