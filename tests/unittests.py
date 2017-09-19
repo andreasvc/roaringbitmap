@@ -314,7 +314,9 @@ class Test_immutablerb(object):
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
 			lrb = list(rb)
-			idx = [random.randint(0, len(ref) - 1) for _ in range(10)]
+			idx = [0, 1, 2] + [
+					random.randint(0, len(ref) - 1) for _ in range(10)] + [
+					len(ref) - 1, len(ref) - 2]
 			for i in idx:
 				assert lrb[i] == ref[i], name
 				assert rb.select(i) in rb, name

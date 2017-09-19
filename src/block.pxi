@@ -946,8 +946,7 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 
 cdef int block_select(Block *self, uint16_t i) except -1:
 	"""Find smallest x s.t. rank(x) >= i."""
-	cdef int n, size
-	cdef uint16_t w = 0
+	cdef int n, size, w = 0
 	if i >= self.cardinality:
 		raise IndexError('select: index %d out of range 0..%d.' % (
 				i, self.cardinality))
@@ -965,9 +964,11 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 			return i
 		elif size == 1:
 			return i + (self.buf.sparse[0] <= i)
+		if self.buf.sparse[0] > i:
+			return i
 		# find the pair of non-members between which the i'th member lies
 		# FIXME: use custom binary search
-		for n in range(size):
+		for n in range(1, size):
 			# subtract n because this inverted block stores n non-members
 			if self.buf.sparse[n] - n > i:
 				# result lies between value at n-1 and n
