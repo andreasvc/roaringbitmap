@@ -980,12 +980,9 @@ cdef class RoaringBitmap(object):
 
 	cdef _resize(self, int k):
 		"""Set size and if necessary reduce array allocation to k elements."""
-		cdef size_t n
 		cdef void *tmp1
 		cdef void *tmp2
 		if k > INITCAPACITY and k * 2 < <int>self.capacity:
-			for n in range(k, self.size):
-				free(self.data[n].buf.ptr)
 			tmp1 = realloc(self.keys, k * sizeof(uint16_t))
 			tmp2 = realloc(self.data, k * sizeof(Block))
 			if tmp1 is NULL or tmp2 is NULL:

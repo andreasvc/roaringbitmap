@@ -434,7 +434,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 			result.buf.sparse[length] = elem
 			length += TESTBIT(other.buf.dense, elem) == 0
 		result.cardinality = length
-		trimcapacity(self, length)
+		trimcapacity(result, length)
 	elif self.state == DENSE and other.state == INVERTED:
 		convertalloc(result, POSITIVE, BLOCKSIZE - other.cardinality)
 		for n in range(other.cardinality):
@@ -442,7 +442,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 			result.buf.sparse[length] = elem
 			length += TESTBIT(self.buf.dense, elem)
 		result.cardinality = length
-		trimcapacity(self, length)
+		trimcapacity(result, length)
 	elif self.state == INVERTED and other.state == DENSE:
 		replacearray(result, block_asdense(self),
 				BITMAPSIZE // sizeof(uint16_t))

@@ -180,21 +180,21 @@ class Test_immutablerb(object):
 	def test_initsorted(self, single):
 		for name, data in single:
 			ref = set(sorted(data))
-			rb = RoaringBitmap(sorted(data))
+			rb = ImmutableRoaringBitmap(sorted(data))
 			rb._checkconsistency()
 			assert ref == rb, name
 
 	def test_initunsorted(self, single):
 		for name, data in single:
 			ref = set(data)
-			rb = RoaringBitmap(data)
+			rb = ImmutableRoaringBitmap(data)
 			rb._checkconsistency()
 			assert ref == rb, name
 
 	def test_inititerator(self, single):
 		for name, data in single:
 			ref = set(a for a in data)
-			rb = RoaringBitmap(a for a in data)
+			rb = ImmutableRoaringBitmap(a for a in data)
 			rb._checkconsistency()
 			assert ref == rb, name
 
@@ -202,7 +202,7 @@ class Test_immutablerb(object):
 		# creates a positive, dense, and inverted block, respectively
 		for n in [400, 6000, 61241]:
 			ref = set(range(23, n))
-			rb = RoaringBitmap(range(23, n))
+			rb = ImmutableRoaringBitmap(range(23, n))
 			rb._checkconsistency()
 			assert ref == rb, n
 
@@ -236,19 +236,19 @@ class Test_immutablerb(object):
 	def test_or(self, pair):
 		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
-			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			rb, rb2 = ImmutableRoaringBitmap(data1), ImmutableRoaringBitmap(data2)
 			assert ref | ref2 == set(rb | rb2), name
 
 	def test_xor(self, pair):
 		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
-			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			rb, rb2 = ImmutableRoaringBitmap(data1), ImmutableRoaringBitmap(data2)
 			assert ref ^ ref2 == set(rb ^ rb2), name
 
 	def test_sub(self, pair):
 		for name, data1, data2 in pair:
 			ref, ref2 = set(data1), set(data2)
-			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
+			rb, rb2 = ImmutableRoaringBitmap(data1), ImmutableRoaringBitmap(data2)
 			assert ref - ref2 == set(rb - rb2), name
 
 	def test_aggregateand(self, multi):
