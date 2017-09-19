@@ -769,3 +769,8 @@ class Test_roaringbitmap(object):
 		r.difference_update(RoaringBitmap([130752]))
 		assert 130752 not in r
 		assert r.pop() == 131068
+
+	def test_issue25(self):
+		r = RoaringBitmap({1})
+		r.intersection_update(RoaringBitmap([]))
+		assert len(r) == 0

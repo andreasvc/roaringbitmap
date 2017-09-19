@@ -44,7 +44,9 @@ cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef uint16_t *keys = NULL
 	cdef Block *data = NULL
 	cdef Block b2
-	if pos1 < ob1.size and pos2 < ob2.size:
+	if ob2.size == 0:
+		ob1.size = 0
+	elif ob1.size > 0:
 		ob1.capacity = min(ob1.size, ob2.size)
 		ob1._tmpalloc(ob1.capacity, &keys, &data)
 		while True:
