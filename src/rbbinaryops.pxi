@@ -220,9 +220,8 @@ cdef inline RoaringBitmap rb_and(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
-		result._extendarray(min(ob1.size, ob2.size))
 		# initialize to zero so that unallocated blocks can be detected
-		memset(result.data, 0, result.capacity * sizeof(Block))
+		result._initarray(min(ob1.size, ob2.size))
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				pos1 += 1
@@ -252,8 +251,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
-		result._extendarray(ob1.size)
-		memset(result.data, 0, result.capacity * sizeof(Block))
+		result._initarray(ob1.size)
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
@@ -289,8 +287,7 @@ cdef inline RoaringBitmap rb_or(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
-		result._extendarray(ob1.size + ob2.size)
-		memset(result.data, 0, result.capacity * sizeof(Block))
+		result._initarray(ob1.size + ob2.size)
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
@@ -332,8 +329,7 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
 	if pos1 < ob1.size and pos2 < ob2.size:
-		result._extendarray(ob1.size + ob2.size)
-		memset(result.data, 0, result.capacity * sizeof(Block))
+		result._initarray(ob1.size + ob2.size)
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
@@ -421,8 +417,7 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 		jj = self._getindex(highbits(stop))
 		# when block was not found, round down to preceding block
 		j = -jj - 2 if jj < 0 else jj
-	result._extendarray(j - i + 1)
-	memset(result.data, 0, result.capacity * sizeof(Block))
+	result._initarray(j - i + 1)
 	block_clamp(
 			&(result.data[0]), self._getblk(i, &b1),
 			lowbits(start) if i == ii else 0,

@@ -961,6 +961,11 @@ cdef class RoaringBitmap(object):
 	# 		block_add(block, lowbits(elem))
 	# 		block_convert(block)
 
+	cdef _initarray(self, int k):
+		"""Allocate k elements and initialize pointers to zero."""
+		self._extendarray(k)
+		memset(self.data, 0, self.capacity * sizeof(Block))
+
 	cdef _extendarray(self, int k):
 		"""Extend allocation with k extra elements + amortization."""
 		cdef size_t desired = self.size + k
