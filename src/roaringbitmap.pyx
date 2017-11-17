@@ -563,9 +563,8 @@ cdef class RoaringBitmap(object):
 		cdef RoaringBitmap result
 		if len(other) == 1:
 			return self & other[0]
-		other = list(other)
-		other.append(self)
-		other.sort(key=RoaringBitmap.numelem)
+		other = sorted([self] + [ensurerb(a) for a in other],
+				key=RoaringBitmap.numelem)
 		result = other[0] & other[1]
 		for ob in other[2:]:
 			result &= ob
@@ -579,7 +578,7 @@ cdef class RoaringBitmap(object):
 		(i.e. all elements that are in at least one of the sets.)"""
 		if len(other) == 1:
 			return self | other[0]
-		queue = [(ob1.numelem(), ob1) for ob1 in other]
+		queue = [(ob1.numelem(), ob1) for ob1 in map(ensurerb, other)]
 		queue.append((self.numelem(), self))
 		heapq.heapify(queue)
 		while len(queue) > 1:
@@ -595,7 +594,8 @@ cdef class RoaringBitmap(object):
 
 		(i.e, self - other[0] - other[1] - ...)"""
 		cdef RoaringBitmap result
-		other = sorted(other, key=RoaringBitmap.numelem, reverse=True)
+		other = sorted(map(ensurerb, other),
+				key=RoaringBitmap.numelem, reverse=True)
 		result = self - other[0]
 		for ob in other[1:]:
 			result -= ob
@@ -629,7 +629,7 @@ cdef class RoaringBitmap(object):
 		if len(other) == 1:
 			self |= other[0]
 			return
-		queue = [(ob1.numelem(), ob1) for ob1 in other]
+		queue = [(ob1.numelem(), ob1) for ob1 in map(ensurerb, other)]
 		heapq.heapify(queue)
 		while len(queue) > 1:
 			_, ob1 = heapq.heappop(queue)
@@ -656,7 +656,7 @@ cdef class RoaringBitmap(object):
 		elif len(other) == 1:
 			self &= other[0]
 			return
-		other = sorted(other, key=RoaringBitmap.numelem)
+		other = sorted(map(ensurerb, other), key=RoaringBitmap.numelem)
 		for ob in other:
 			self &= ob
 			if self.size == 0:
