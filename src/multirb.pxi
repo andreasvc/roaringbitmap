@@ -80,12 +80,20 @@ cdef class MultiRoaringBitmap(object):
 			self._ob.flush()
 		releasebuf(&buffer)
 
-	def __dealloc__(self):
+	def close(self):
 		"""Close opened file, if any."""
 		if hasattr(self._ob, 'close'):
 			self._ob.close()
+			self._ob = None
 			if self._file is not None:
 				os.close(self._file)
+				self._file = None
+
+	def __enter__(self):
+		return self
+
+	def __exit__(self, _type, _value, _traceback):
+		self.close()
 
 	def __getstate__(self):
 		"""Return a serialized representation (Python array) for pickling."""
