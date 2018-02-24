@@ -561,7 +561,9 @@ cdef class RoaringBitmap(object):
 
 		(i.e. elements that are common to all of the sets.)"""
 		cdef RoaringBitmap result
-		if len(other) == 1:
+		if len(other) == 0:
+			return self
+		elif len(other) == 1:
 			return self & other[0]
 		other = sorted([self] + [ensurerb(a) for a in other],
 				key=RoaringBitmap.numelem)
@@ -576,7 +578,9 @@ cdef class RoaringBitmap(object):
 		"""Return the union of two or more sets as a new set.
 
 		(i.e. all elements that are in at least one of the sets.)"""
-		if len(other) == 1:
+		if len(other) == 0:
+			return self
+		elif len(other) == 1:
 			return self | other[0]
 		queue = [(ob1.numelem(), ob1) for ob1 in map(ensurerb, other)]
 		queue.append((self.numelem(), self))
@@ -594,6 +598,8 @@ cdef class RoaringBitmap(object):
 
 		(i.e, self - other[0] - other[1] - ...)"""
 		cdef RoaringBitmap result
+		if len(other) == 0:
+			return self
 		other = sorted(map(ensurerb, other),
 				key=RoaringBitmap.numelem, reverse=True)
 		result = self - other[0]
