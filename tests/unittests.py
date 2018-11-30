@@ -161,7 +161,7 @@ class Test_multirb(object):
 			for i in range(5):
 				for_multi += [RoaringBitmap(random.sample(range(99999), 200))]
 			mrb = MultiRoaringBitmap(for_multi)
-			for_multi_pre += [mrb[0],mrb[1]]
+			for_multi_pre += [mrb[0], mrb[1]]
 
 		assert type(for_multi_pre) is list
 		for_multi_pre[-1]
@@ -689,11 +689,11 @@ class Test_roaringbitmap(object):
 		assert rb[0] == 0x10000
 		rb = RoaringBitmap(range(0x10010, 0x1ffff + 1))
 		assert rb[0] == 0x10010
-		l = list(range(1, 0xccbb))
-		l.extend(range(0xcccc, 0xfffc))
-		rb = RoaringBitmap(l)
+		lst = list(range(1, 0xccbb))
+		lst.extend(range(0xcccc, 0xfffc))
+		rb = RoaringBitmap(lst)
 		for n in (0, 0xcccc, -1):
-			assert l[n] == rb[n], (n, l[n], rb[n])
+			assert lst[n] == rb[n], (n, lst[n], rb[n])
 
 	def test_pickle(self, single):
 		for name, data in single:
@@ -737,7 +737,7 @@ class Test_roaringbitmap(object):
 		c = RoaringBitmap(range(2))
 		a |= b
 		a |= c
-		assert len(a -  b - c) == 0
+		assert len(a - b - c) == 0
 		assert len((b | c) - b - c) == 0
 
 	def test_issue22(self):
@@ -775,4 +775,10 @@ class Test_roaringbitmap(object):
 	def test_issue25(self):
 		r = RoaringBitmap({1})
 		r.intersection_update(RoaringBitmap([]))
+		assert len(r) == 0
+
+	def test_issue28(self):
+		rbm = RoaringBitmap()
+		rbm.add(3995084765)
+		r = rbm.clamp(0, 8388607)
 		assert len(r) == 0
