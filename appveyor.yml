@@ -25,8 +25,8 @@ install:
   - "%PYTHON%\\python.exe -m pip install --upgrade pip"
   - "%PYTHON%\\python.exe -m pip install wheel"
   - "%PYTHON%\\python.exe -m pip install -r requirements.txt"
-  - "%PYTHON%\\python.exe setup.py build_ext --inplace"
-  - "%PYTHON%\\python.exe setup.py install"
+  - "%PYTHON%\\python.exe setup.py build_ext --inplace --debug"
+  - "%PYTHON%\\python.exe setup.py install --debug"
 
 test_script:
   # Put your test command here.
