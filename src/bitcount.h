@@ -53,10 +53,10 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	return __builtin_clzll(v);
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
-	if (static_cast<uint32_t>(v >> 32) != 0) {
-		_BitScanReverse(&result, static_cast<uint32_t>(v >> 32));
+	if ((uint32_t)(v >> 32) != 0) {
+		_BitScanReverse(&result, (uint32_t)(v >> 32));
 	} else {
-		_BitScanReverse(&result, static_cast<uint32_t>(v));
+		_BitScanReverse(&result, (uint32_t)v);
 		result += 32;
 	}
 	return BITCOUNT_BITS - 1 - result;
@@ -77,12 +77,12 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
 	/* https://github.com/google/re2/commit/35febd432d9e6d8630845285c7f29eabd1df7beb */
-	if (static_cast<uint32_t>(v) != 0) {
-		_BitScanForward(&result, static_cast<uint32_t>(v));
-		return static_cast<unsigned int>(result);
+	if ((uint32_t)v != 0) {
+		_BitScanForward(&result, (uint32_t)v);
+		return (unsigned int>(result);
 	} else {
-		_BitScanForward(&result, static_cast<uint32_t>(v >> 32));
-		return static_cast<unsigned int>(result) + 32;
+		_BitScanForward(&result, (uint32_t)(v >> 32));
+		return (unsigned int>(result) + 32;
 	}
 	#elif defined(BITCOUNT_VS_X64)
 	uint64_t result;
@@ -98,8 +98,7 @@ BITCOUNT_INLINE unsigned int bit_popcount(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_popcountll(v);
 	#elif defined(BITCOUNT_VS_X86)
-	return (__popcnt(static_cast<uint32_t>(v))
-			+ __popcnt(static_cast<uint32_t>(v >> 32)));
+	return (__popcnt((uint32_t)v) + __popcnt((uint32_t)(v >> 32)));
 	#elif defined(BITCOUNT_VS_X64)
 	return __popcnt64(v);
 	#else
