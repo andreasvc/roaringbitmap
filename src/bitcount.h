@@ -14,10 +14,10 @@ extern "C" {
 #if !defined(BITCOUNT_NO_AUTODETECT)
 	#if defined(__GNUC__) || defined(__clang__)
 		#define BITCOUNT_GCC
-	#elif defined(_MSC_VER) && defined(_M_IX86)
-		#define BITCOUNT_VS_X86
-	#elif defined(_MSC_VER) && defined(_M_X64)
-		#define BITCOUNT_VS_X64
+	// #elif defined(_MSC_VER) && defined(_M_IX86)
+	// 	#define BITCOUNT_VS_X86
+	// #elif defined(_MSC_VER) && defined(_M_X64)
+	// 	#define BITCOUNT_VS_X64
 	#endif
 #endif
 
