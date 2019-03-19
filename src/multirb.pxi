@@ -37,7 +37,10 @@ cdef class MultiRoaringBitmap(object):
 		cdef int result
 
 		if filename is not None:
-			self._file = os.open(filename, os.O_CREAT | os.O_RDWR)
+			flags = os.O_CREAT | os.O_RDWR
+			if sys.platform == 'win32':
+				flags |= os.O_BINARY
+			self._file = os.open(filename, flags)
 
 		tmp = [None if a is None else ImmutableRoaringBitmap(a) for a in init]
 		self.size = len(tmp)
@@ -115,7 +118,10 @@ cdef class MultiRoaringBitmap(object):
 		cdef char *ptr = NULL
 		cdef Py_ssize_t size = 0
 		ob = MultiRoaringBitmap.__new__(MultiRoaringBitmap)
-		ob._file = os.open(filename, os.O_RDONLY)
+		flags = os.O_RDONLY
+		if sys.platform == 'win32':
+			flags |= os.O_BINARY
+		ob._file = os.open(filename, flags)
 		ob._ob = mmap.mmap(ob._file, 0, access=mmap.ACCESS_READ)
 		result = getbufptr(ob._ob, &ptr, &size, &buffer)
 		ob.ptr = <uint32_t *>ptr

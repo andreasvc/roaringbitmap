@@ -14,10 +14,10 @@ extern "C" {
 #if !defined(BITCOUNT_NO_AUTODETECT)
 	#if defined(__GNUC__) || defined(__clang__)
 		#define BITCOUNT_GCC
-	// #elif defined(_MSC_VER) && defined(_M_IX86)
-	// 	#define BITCOUNT_VS_X86
 	// #elif defined(_MSC_VER) && defined(_M_X64)
 	// 	#define BITCOUNT_VS_X64
+	// #elif defined(_MSC_VER) && defined(_M_IX86)
+	// 	#define BITCOUNT_VS_X86
 	#endif
 #endif
 
@@ -27,14 +27,14 @@ extern "C" {
 #define BITCOUNT_INLINE static inline
 #endif
 
-#ifdef BITCOUNT_VS_X86
-#include <intrin.h>
-#pragma intrinsic(_BitScanForward,_BitScanReverse,__popcnt)
-#endif
-
 #ifdef BITCOUNT_VS_X64
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward64,_BitScanReverse64,__popcnt64)
+#endif
+
+#ifdef BITCOUNT_VS_X86
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward,_BitScanReverse,__popcnt)
 #endif
 
 #include <limits.h>
@@ -51,6 +51,10 @@ unsigned int bit_popcount_general(uint64_t);
 BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_clzll(v);
+	#elif defined(BITCOUNT_VS_X64)
+	unsigned long result;
+	_BitScanReverse64(&result, v);
+	return BITCOUNT_BITS - 1 - result;
 	#elif defined(BITCOUNT_VS_X86)
 	unsigned long result;
 	if ((uint32_t)(v >> 32) != 0) {
@@ -59,10 +63,6 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 		_BitScanReverse(&result, (uint32_t)v);
 		result += 32;
 	}
-	return BITCOUNT_BITS - 1 - result;
-	#elif defined(BITCOUNT_VS_X64)
-	unsigned long result;
-	_BitScanReverse64(&result, v);
 	return BITCOUNT_BITS - 1 - result;
 	#else
 	return bit_clz_general(v);
@@ -74,6 +74,10 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_ctzll(v);
+	#elif defined(BITCOUNT_VS_X64)
+	unsigned long result;
+	_BitScanForward64(&result, v);
+	return result;
 	#elif defined(BITCOUNT_VS_X86)
 	unsigned long result;
 	/* https://github.com/google/re2/commit/35febd432d9e6d8630845285c7f29eabd1df7beb */
@@ -84,10 +88,6 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 		_BitScanForward(&result, (uint32_t)(v >> 32));
 		return (unsigned int)(result) + 32;
 	}
-	#elif defined(BITCOUNT_VS_X64)
-	unsigned long result;
-	_BitScanForward64(&result, v);
-	return result;
 	#else
 	return bit_ctz_general(v);
 	#endif
@@ -97,10 +97,10 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 BITCOUNT_INLINE unsigned int bit_popcount(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_popcountll(v);
-	#elif defined(BITCOUNT_VS_X86)
-	return (__popcnt((uint32_t)v) + __popcnt((uint32_t)(v >> 32)));
 	#elif defined(BITCOUNT_VS_X64)
 	return __popcnt64(v);
+	#elif defined(BITCOUNT_VS_X86)
+	return (__popcnt((uint32_t)v) + __popcnt((uint32_t)(v >> 32)));
 	#else
 	return bit_popcount_general(v);
 	#endif
