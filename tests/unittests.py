@@ -30,8 +30,7 @@ PARAMS = [
 		]
 
 
-@pytest.fixture(scope='module')
-def single():
+def _single():
 	random.seed(42)
 	result = []
 	for name, elements, maxnum in PARAMS:
@@ -45,10 +44,15 @@ def single():
 
 
 @pytest.fixture(scope='module')
+def single():
+	return _single()
+
+
+@pytest.fixture(scope='module')
 def pair():
 	result = []
-	for name1, a in single():
-		for name2, b in single():
+	for name1, a in _single():
+		for name2, b in _single():
 			b = sorted(b[:len(b) // 2] + a[len(a) // 2:])
 			result.append((name1 + ':' + name2, a, b))
 	return result

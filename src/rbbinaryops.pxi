@@ -46,14 +46,14 @@ cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef Block b2
 	if ob2.size == 0:
 		for pos1 in range(ob1.size):
-			free(ob1.data[pos1].buf.ptr)
+			aligned_free(ob1.data[pos1].buf.ptr)
 		ob1._resize(0)
 	elif ob1.size > 0:
 		ob1.capacity = min(ob1.size, ob2.size)
 		ob1._tmpalloc(ob1.capacity, &keys, &data)
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
-				free(ob1.data[pos1].buf.ptr)
+				aligned_free(ob1.data[pos1].buf.ptr)
 				pos1 += 1
 				if pos1 == ob1.size:
 					break
@@ -68,7 +68,7 @@ cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
 					data[res] = ob1.data[pos1]
 					res += 1
 				else:
-					free(ob1.data[pos1].buf.ptr)
+					aligned_free(ob1.data[pos1].buf.ptr)
 				pos1 += 1
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
@@ -104,7 +104,7 @@ cdef inline RoaringBitmap rb_isub(RoaringBitmap ob1, RoaringBitmap ob2):
 					data[res] = ob1.data[pos1]
 					res += 1
 				else:
-					free(ob1.data[pos1].buf.ptr)
+					aligned_free(ob1.data[pos1].buf.ptr)
 				pos1 += 1
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
@@ -196,7 +196,7 @@ cdef inline RoaringBitmap rb_ixor(RoaringBitmap ob1, RoaringBitmap ob2):
 					data[res] = ob1.data[pos1]
 					res += 1
 				else:
-					free(ob1.data[pos1].buf.ptr)
+					aligned_free(ob1.data[pos1].buf.ptr)
 				pos1 += 1
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
@@ -241,7 +241,7 @@ cdef inline RoaringBitmap rb_and(RoaringBitmap ob1, RoaringBitmap ob2):
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
 					break
-		free(result.data[result.size].buf.ptr)
+		aligned_free(result.data[result.size].buf.ptr)
 		result._resize(result.size)
 	return result
 
@@ -277,7 +277,7 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 			for pos1 in range(pos1, ob1.size):
 				result._insertcopy(
 						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
-		free(result.data[result.size].buf.ptr)
+		aligned_free(result.data[result.size].buf.ptr)
 		result._resize(result.size)
 	return result
 
@@ -353,7 +353,7 @@ cdef inline RoaringBitmap rb_xor(RoaringBitmap ob1, RoaringBitmap ob2):
 				pos2 += 1
 				if pos1 == ob1.size or pos2 == ob2.size:
 					break
-		free(result.data[result.size].buf.ptr)
+		aligned_free(result.data[result.size].buf.ptr)
 	if pos1 == ob1.size:
 		result._extendarray(ob2.size - pos2)
 		for pos2 in range(pos2, ob2.size):
@@ -428,7 +428,7 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 		result.keys[result.size] = self.keys[i]
 		result.size += 1
 	else:
-		free(result.data[0].buf.ptr)
+		aligned_free(result.data[0].buf.ptr)
 	for n in range(i + 1, j):
 		block_copy(&(result.data[result.size]), self._getblk(n, &b1))
 		result.keys[result.size] = self.keys[n]
@@ -441,7 +441,7 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 			result.keys[result.size] = self.keys[j]
 			result.size += 1
 		else:
-			free(result.data[result.size].buf.ptr)
+			aligned_free(result.data[result.size].buf.ptr)
 	result._resize(result.size)
 	return result
 

@@ -77,7 +77,10 @@ if __name__ == '__main__':
 	# NB: could also use Cython compile-time definition,
 	# but this would lead to different C output for Python 2/3.
 	extra_compile_args = ['-DPY2=%d' % PY2]  # '-fopt-info-vec-missed',
-	if sys.platform != 'win32':
+	if sys.platform == 'win32':
+		# https://docs.microsoft.com/en-us/cpp/intrinsics/bitscanforward-bitscanforward64?view=vs-2017
+		extra_compile_args += ['-EHsc']
+	else:
 		extra_compile_args += [
 				'-Wno-strict-prototypes', '-Wno-unreachable-code']
 	extra_link_args = []

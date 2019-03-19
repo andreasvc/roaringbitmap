@@ -76,7 +76,8 @@ cdef extern from "macros.h":
 	void CLEARBIT(uint64_t a[], int b) nogil
 	uint64_t TESTBIT(uint64_t a[], int b) nogil
 	uint64_t BITMASK(int b) nogil
-
+	void *aligned_malloc(size_t size, size_t align) nogil
+	void aligned_free(void *ptr) nogil
 
 cdef extern from "bitcount.h":
 	unsigned int bit_clz(uint64_t) nogil
@@ -190,7 +191,7 @@ cdef class RoaringBitmap(object):
 	def __dealloc__(self):
 		if self.data is not NULL and self.offset == 0:
 			for n in range(self.size):
-				free(self.data[n].buf.ptr)
+				aligned_free(self.data[n].buf.ptr)
 			free(<void *>self.keys)
 			free(<void *>self.data)
 			self.keys = self.data = NULL
@@ -339,7 +340,7 @@ cdef class RoaringBitmap(object):
 		"""Remove all elements from this RoaringBitmap."""
 		cdef size_t n
 		for n in range(self.size):
-			free(self.data[n].buf.ptr)
+			aligned_free(self.data[n].buf.ptr)
 		free(self.keys)
 		free(self.data)
 		self.size = 0
@@ -1019,7 +1020,7 @@ cdef class RoaringBitmap(object):
 
 	cdef _removeatidx(self, int i):
 		"""Remove the i'th element."""
-		free(self.data[i].buf.ptr)
+		aligned_free(self.data[i].buf.ptr)
 		memmove(&(self.keys[i]), &(self.keys[i + 1]),
 				(self.size - i - 1) * sizeof(uint16_t))
 		memmove(&(self.data[i]), &(self.data[i + 1]),

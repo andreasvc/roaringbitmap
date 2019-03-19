@@ -201,7 +201,7 @@ cdef void block_clamp(
 				result.cardinality -= bit_popcount(buf.dense[n])
 				result.buf.dense[n] = 0
 		if buf.ptr != src.buf.ptr:
-			free(buf.ptr)
+			aligned_free(buf.ptr)
 		block_convert(result)
 	elif src.state == POSITIVE:
 		n, m = 0, src.cardinality
@@ -645,7 +645,7 @@ cdef void block_ixor(Block *self, Block *other) nogil:
 			CLEARBIT(buf.dense, other.buf.sparse[n])
 		self.cardinality = bitsetxor(
 				self.buf.dense, self.buf.dense, buf.dense)
-		free(buf.dense)
+		aligned_free(buf.ptr)
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		alloc = self.cardinality + other.cardinality
 		buf.sparse = allocsparse(alloc)
@@ -1086,8 +1086,8 @@ cdef inline void block_toinvarray(Block *self) nogil:
 cdef inline uint16_t *allocsparse(int length) nogil:
 	# Variable length integer vector
 	cdef Buffer buf
-	buf.sparse = <uint16_t *>malloc((length or 1) * sizeof(uint16_t))
-	if buf.sparse is NULL:
+	buf.ptr = aligned_malloc((length or 1) * sizeof(uint16_t), sizeof(void *))
+	if buf.ptr is NULL:
 		abort()
 	return buf.sparse
 
@@ -1096,15 +1096,14 @@ cdef inline uint64_t *allocdense() nogil:
 	# Fixed-size, aligned bitmap.
 	# NB: initialization up to caller.
 	cdef Buffer buf
-	buf.ptr = NULL
-	cdef int r = posix_memalign(&buf.ptr, 32, BITMAPSIZE)
-	if r != 0:
+	buf.ptr = aligned_malloc(BITMAPSIZE, 32)
+	if buf.ptr is NULL:
 		abort()
 	return buf.dense
 
 
 cdef inline void replacearray(Block *self, Buffer buf, size_t cap) nogil:
-	free(self.buf.ptr)
+	aligned_free(self.buf.ptr)
 	self.buf.ptr = buf.ptr
 	self.capacity = cap
 
@@ -1145,12 +1144,12 @@ cdef void convertalloc(Block *self, int state, int alloc) nogil:
 	cdef void *tmp
 	if state == DENSE:
 		if self.state != DENSE or self.buf.ptr is NULL:
-			free(self.buf.ptr)
+			aligned_free(self.buf.ptr)
 			self.buf.dense = allocdense()
 			self.capacity = BITMAPSIZE // sizeof(uint16_t)
 	elif state == POSITIVE:
 		if self.state == DENSE:
-			free(self.buf.ptr)
+			aligned_free(self.buf.ptr)
 			self.buf.sparse = allocsparse(alloc)
 			self.capacity = alloc
 		elif alloc > self.capacity or self.buf.ptr is NULL:
@@ -1161,7 +1160,7 @@ cdef void convertalloc(Block *self, int state, int alloc) nogil:
 			self.capacity = alloc
 	else:  # state == INVERTED:
 		if self.state == DENSE:
-			free(self.buf.ptr)
+			aligned_free(self.buf.ptr)
 			self.buf.sparse = allocsparse(alloc)
 			self.capacity = alloc
 		elif alloc > self.capacity or self.buf.ptr is NULL:
