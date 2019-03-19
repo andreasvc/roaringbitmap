@@ -11,8 +11,8 @@ try:
 	faulthandler.enable()
 except ImportError:
 	pass
-from roaringbitmap import RoaringBitmap, ImmutableRoaringBitmap, \
-		MultiRoaringBitmap
+from roaringbitmap import (RoaringBitmap, ImmutableRoaringBitmap,
+		MultiRoaringBitmap, bitcounttests, aligned_malloc_tests)
 PY2 = sys.version_info[0] == 2
 if PY2:
 	range = xrange
@@ -22,10 +22,10 @@ else:
 
 # (numitems, maxnum)
 PARAMS = [
-		('empty',        0, (1 << 16) - 1),
-		('positive',   200, (1 << 16) - 1),
-		('dense',     5000, (1 << 16) - 1),
-		('inverted',  5000, (1 << 16) - 1),
+		('empty', 0, (1 << 16) - 1),
+		('positive', 200, (1 << 16) - 1),
+		('dense', 5000, (1 << 16) - 1),
+		('inverted', 5000, (1 << 16) - 1),
 		('many keys', 4000, (1 << 25) - 1)
 		]
 
@@ -70,6 +70,14 @@ def multi():
 
 def abbr(a):
 	return a[:500] + '...' + a[-500:]
+
+
+def test_bitcount():
+	assert bitcounttests()
+
+
+def test_aligned_malloc():
+	assert aligned_malloc_tests()
 
 
 class Test_roaringbitmap(object):
@@ -703,7 +711,7 @@ class Test_multirb(object):
 		assert len(orig) == len(mrb)
 		for rb1, rb2 in zip(orig, mrb):
 			assert rb1 == rb2
-		assert mrb.intersection([4, 5]) == None
+		assert mrb.intersection([4, 5]) is None
 
 	def test_aggregateand(self, multi):
 		ref = set(multi[0])

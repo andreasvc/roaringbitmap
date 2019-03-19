@@ -53,7 +53,6 @@ from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int32_t
 from libc.stdio cimport printf
 from libc.stdlib cimport free, malloc, calloc, realloc, abort
 from libc.string cimport memset, memcpy, memcmp, memmove
-from posix.stdlib cimport posix_memalign
 from cpython.buffer cimport PyBUF_SIMPLE, Py_buffer, PyObject_CheckBuffer, \
 		PyObject_GetBuffer, PyBuffer_Release
 from cpython cimport array
@@ -83,6 +82,8 @@ cdef extern from "bitcount.h":
 	unsigned int bit_clz(uint64_t) nogil
 	unsigned int bit_ctz(uint64_t) nogil
 	unsigned int bit_popcount(uint64_t) nogil
+	size_t BITCOUNT_BITS
+	size_t UINT64_MAX
 
 
 cdef extern from "_arrayops.h":
@@ -1179,5 +1180,35 @@ cdef inline void releasebuf(Py_buffer *buf):
 	"""Release buffer if necessary."""
 	if not PY2:
 		PyBuffer_Release(buf)
+
+
+def bitcounttests():
+	assert bit_ctz(2) == 1
+	assert bit_ctz(3) == 0
+	assert bit_ctz(0x80000000) == 31
+	assert bit_ctz(0x1000) == 12
+	assert bit_ctz(UINT64_MAX) == 0
+	assert bit_clz(1) == BITCOUNT_BITS - 1
+	assert bit_clz(4) == BITCOUNT_BITS - 3
+	assert bit_clz(0x80000000) == BITCOUNT_BITS - 32
+	assert bit_clz(0x1000) == BITCOUNT_BITS - 13
+	assert bit_clz(UINT64_MAX) == 0
+	assert bit_popcount(0x1) == 1
+	assert bit_popcount(0x10) == 1
+	assert bit_popcount(0x101001) == 3
+	assert bit_popcount(3) == 2
+	assert bit_popcount(UINT64_MAX) == BITCOUNT_BITS
+	assert bit_popcount(0) == 0
+	return True
+
+
+def aligned_malloc_tests():
+	cdef void *ptr = NULL
+	ptr = aligned_malloc(16, sizeof(void *))
+	assert ptr is not NULL
+	(<uint64_t *>ptr)[0] = 1234
+	aligned_free(ptr)
+	return True
+
 
 __all__ = ['RoaringBitmap', 'ImmutableRoaringBitmap', 'MultiRoaringBitmap']
