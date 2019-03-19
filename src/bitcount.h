@@ -14,8 +14,10 @@ extern "C" {
 #if !defined(BITCOUNT_NO_AUTODETECT)
 	#if defined(__GNUC__) || defined(__clang__)
 		#define BITCOUNT_GCC
-	#elif defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+	#elif defined(_MSC_VER) && defined(_M_IX86)
 		#define BITCOUNT_VS_X86
+	#elif defined(_MSC_VER) && defined(_M_X64)
+		#define BITCOUNT_VS_X64
 	#endif
 #endif
 
@@ -26,6 +28,11 @@ extern "C" {
 #endif
 
 #ifdef BITCOUNT_VS_X86
+#include <intrin.h>
+#pragma intrinsic(_BitScanForward,_BitScanReverse,__popcnt)
+#endif
+
+#ifdef BITCOUNT_VS_X64
 #include <intrin.h>
 #pragma intrinsic(_BitScanForward64,_BitScanReverse64,__popcnt64)
 #endif
@@ -46,6 +53,15 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	return __builtin_clzll(v);
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
+	if (static_cast<uint32_t>(v >> 32) != 0) {
+		_BitScanReverse(&result, static_cast<uint32_t>(v >> 32));
+	} else {
+		_BitScanReverse(&result, static_cast<uint32_t>(v));
+		result += 32;
+	}
+	return BITCOUNT_BITS - 1 - result;
+	#elif defined(BITCOUNT_VS_X64)
+	uint64_t result;
 	_BitScanReverse64(&result, v);
 	return BITCOUNT_BITS - 1 - result;
 	#else
@@ -60,6 +76,16 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	return __builtin_ctzll(v);
 	#elif defined(BITCOUNT_VS_X86)
 	uint64_t result;
+	/* https://github.com/google/re2/commit/35febd432d9e6d8630845285c7f29eabd1df7beb */
+	if (static_cast<uint32_t>(v) != 0) {
+		_BitScanForward(&result, static_cast<uint32_t>(v));
+		return static_cast<unsigned int>(result);
+	} else {
+		_BitScanForward(&result, static_cast<uint32_t>(v >> 32));
+		return static_cast<unsigned int>(result) + 32;
+	}
+	#elif defined(BITCOUNT_VS_X64)
+	uint64_t result;
 	_BitScanForward64(&result, v);
 	return result;
 	#else
@@ -72,6 +98,9 @@ BITCOUNT_INLINE unsigned int bit_popcount(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_popcountll(v);
 	#elif defined(BITCOUNT_VS_X86)
+	return (__popcnt(static_cast<uint32_t>(v))
+			+ __popcnt(static_cast<uint32_t>(v >> 32)));
+	#elif defined(BITCOUNT_VS_X64)
 	return __popcnt64(v);
 	#else
 	return bit_popcount_general(v);
