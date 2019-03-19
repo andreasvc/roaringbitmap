@@ -52,7 +52,7 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_clzll(v);
 	#elif defined(BITCOUNT_VS_X86)
-	uint64_t result;
+	unsigned long result;
 	if ((uint32_t)(v >> 32) != 0) {
 		_BitScanReverse(&result, (uint32_t)(v >> 32));
 	} else {
@@ -61,7 +61,7 @@ BITCOUNT_INLINE unsigned int bit_clz(uint64_t v) {
 	}
 	return BITCOUNT_BITS - 1 - result;
 	#elif defined(BITCOUNT_VS_X64)
-	uint64_t result;
+	unsigned long result;
 	_BitScanReverse64(&result, v);
 	return BITCOUNT_BITS - 1 - result;
 	#else
@@ -75,7 +75,7 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	#if defined(BITCOUNT_GCC)
 	return __builtin_ctzll(v);
 	#elif defined(BITCOUNT_VS_X86)
-	uint64_t result;
+	unsigned long result;
 	/* https://github.com/google/re2/commit/35febd432d9e6d8630845285c7f29eabd1df7beb */
 	if ((uint32_t)v != 0) {
 		_BitScanForward(&result, (uint32_t)v);
@@ -85,7 +85,7 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 		return (unsigned int)(result) + 32;
 	}
 	#elif defined(BITCOUNT_VS_X64)
-	uint64_t result;
+	unsigned long result;
 	_BitScanForward64(&result, v);
 	return result;
 	#else
