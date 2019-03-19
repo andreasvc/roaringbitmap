@@ -76,10 +76,12 @@ if __name__ == '__main__':
 	os.environ['GCC_COLORS'] = 'auto'
 	# NB: could also use Cython compile-time definition,
 	# but this would lead to different C output for Python 2/3.
-	extra_compile_args = ['-DPY2=%d' % PY2,  # '-fopt-info-vec-missed',
-			'-Wno-strict-prototypes', '-Wno-unreachable-code']
+	extra_compile_args = ['-DPY2=%d' % PY2]  # '-fopt-info-vec-missed',
+	if sys.platform != 'win32':
+		extra_compile_args += [
+				'-Wno-strict-prototypes', '-Wno-unreachable-code']
 	extra_link_args = []
-	if not DEBUG:
+	if not DEBUG and sys.platform != 'win32':
 		extra_compile_args += ['-O3', '-DNDEBUG']
 		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
 		extra_link_args += ['-DNDEBUG']
