@@ -1204,10 +1204,31 @@ def bitcounttests():
 
 def aligned_malloc_tests():
 	cdef void *ptr = NULL
-	ptr = aligned_malloc(16, sizeof(void *))
+	ptr = aligned_malloc(1024, sizeof(void *))
 	assert ptr is not NULL
 	(<uint64_t *>ptr)[0] = 1234
 	aligned_free(ptr)
+	return True
+
+
+def mmaptests():
+	cdef Py_buffer buffer
+	cdef Py_ssize_t size = 0
+	cdef char *ptr = NULL
+	cdef uint32_t *uptr
+	cdef int result
+
+	alignment = 32
+	alloc = sizeof(uint32_t) + 8 * sizeof(uint32_t)
+	extra = alignment - alloc % alignment
+	alloc += extra + 1024
+
+	ob = mmap.mmap(-1, alloc, access=mmap.ACCESS_WRITE)
+	result = getbufptr(ob, &ptr, &size, &buffer)
+	if result != 0:
+		raise ValueError('could not get buffer from mmap.')
+	uptr = <uint32_t *>ptr
+	uptr[0] = 1234
 	return True
 
 

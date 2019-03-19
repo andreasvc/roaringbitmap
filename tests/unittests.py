@@ -12,7 +12,7 @@ try:
 except ImportError:
 	pass
 from roaringbitmap import (RoaringBitmap, ImmutableRoaringBitmap,
-		MultiRoaringBitmap, bitcounttests, aligned_malloc_tests)
+		MultiRoaringBitmap, bitcounttests, aligned_malloc_tests, mmaptests)
 PY2 = sys.version_info[0] == 2
 if PY2:
 	range = xrange
@@ -78,6 +78,10 @@ def test_bitcount():
 
 def test_aligned_malloc():
 	assert aligned_malloc_tests()
+
+
+def test_mmap():
+	assert mmaptests()
 
 
 class Test_roaringbitmap(object):
