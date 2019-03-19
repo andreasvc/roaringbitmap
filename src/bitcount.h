@@ -79,10 +79,10 @@ BITCOUNT_INLINE unsigned int bit_ctz(uint64_t v) {
 	/* https://github.com/google/re2/commit/35febd432d9e6d8630845285c7f29eabd1df7beb */
 	if ((uint32_t)v != 0) {
 		_BitScanForward(&result, (uint32_t)v);
-		return (unsigned int>(result);
+		return (unsigned int)result;
 	} else {
 		_BitScanForward(&result, (uint32_t)(v >> 32));
-		return (unsigned int>(result) + 32;
+		return (unsigned int)(result) + 32;
 	}
 	#elif defined(BITCOUNT_VS_X64)
 	uint64_t result;
