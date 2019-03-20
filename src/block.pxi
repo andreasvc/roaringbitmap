@@ -45,7 +45,7 @@ cdef inline void block_discard(Block *self, uint16_t elem) nogil:
 
 cdef uint64_t block_pop(Block *self) except BLOCKSIZE:
 	"""Remove and return the largest element."""
-	cdef uint32_t n
+	cdef int n
 	cdef uint64_t cur
 	cdef int idx, low
 	if self.state == DENSE:
