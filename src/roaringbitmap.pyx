@@ -1096,7 +1096,7 @@ cdef class RoaringBitmap(object):
 		for n in range(self.size):
 			assert self.data[n].state in (DENSE, POSITIVE, INVERTED)
 			assert 1 <= self.data[n].cardinality < 1 << 16
-			assert 0 <= getsize(&(self.data[n])) <= self.data[n].capacity
+			assert getsize(&(self.data[n])) <= self.data[n].capacity
 			if self.data[n].state == POSITIVE:
 				assert 1 <= self.data[n].cardinality < MAXARRAYLENGTH
 			elif self.data[n].state == DENSE:

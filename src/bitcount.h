@@ -14,6 +14,7 @@ extern "C" {
 #if !defined(BITCOUNT_NO_AUTODETECT)
 	#if defined(__GNUC__) || defined(__clang__)
 		#define BITCOUNT_GCC
+	// FIXME: disabled for debugging
 	// #elif defined(_MSC_VER) && defined(_M_X64)
 	// 	#define BITCOUNT_VS_X64
 	// #elif defined(_MSC_VER) && defined(_M_IX86)
@@ -108,8 +109,7 @@ BITCOUNT_INLINE unsigned int bit_popcount(uint64_t v) {
 
 unsigned int bit_clz_general(uint64_t v) {
 	/* From http://www.codeproject.com/Tips/784635/UInt-Bit-Operations */
-	uint64_t i;
-	unsigned int c;
+	uint64_t i, c;
 
 	i = ~v;
 	c = ((i ^ (i + 1)) & i) >> 63;
@@ -136,13 +136,13 @@ unsigned int bit_clz_general(uint64_t v) {
 
 	c += (v >> 63) ^ 1;
 
-	return c;
+	return (unsigned int)c;
 }
 
 unsigned int bit_ctz_general(uint64_t v) {
 	/* From http://www.codeproject.com/Tips/784635/UInt-Bit-Operations */
 	uint64_t i = ~v;
-	unsigned int c = ((i ^ (i + 1)) & i) >> 63;
+	uint64_t c = ((i ^ (i + 1)) & i) >> 63;
 
 	i = (v & 0xffffffff) + 0xffffffff;
 	i = ((i & 0x100000000) ^ 0x100000000) >> 27;
@@ -166,7 +166,7 @@ unsigned int bit_ctz_general(uint64_t v) {
 
 	c += ((v & 1) ^ 1);
 
-	return c;
+	return (unsigned int)c;
 }
 
 unsigned int bit_popcount_general(uint64_t v) {

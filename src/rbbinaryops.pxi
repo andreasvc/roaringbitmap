@@ -417,7 +417,7 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 		jj = self._getindex(highbits(stop))
 		# when block was not found, round down to preceding block
 		j = -jj - 2 if jj < 0 else jj
-	if i >= self.size or j < 0:
+	if i >= <int32_t>self.size or j < 0:
 		return result
 	result._initarray(j - i + 1)
 	block_clamp(

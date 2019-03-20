@@ -82,7 +82,7 @@ if __name__ == '__main__':
 		extra_compile_args += ['-EHsc']
 	else:
 		extra_compile_args += [
-				'-Wno-strict-prototypes', '-Wno-unreachable-code']
+				'-Wno-strict-prototypes', '-Wno-unreachable-code', '-Wextra']
 	extra_link_args = []
 	if not DEBUG and sys.platform != 'win32':
 		extra_compile_args += ['-O3', '-DNDEBUG']

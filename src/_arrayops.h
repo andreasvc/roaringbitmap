@@ -9,7 +9,7 @@
  * Generic intersection function. Passes unit tests.
  *
  * From CRoaring, array_util.c
- * cf. https://github.com/lemire/CRoaring/src/array_util.c
+ * cf. https://github.com/RoaringBitmap/CRoaring/blob/master/src/array_util.c
  */
 int32_t intersect_general16(const uint16_t *A, const size_t lenA,
         const uint16_t *B, const size_t lenB, uint16_t *out) {
@@ -21,19 +21,19 @@ int32_t intersect_general16(const uint16_t *A, const size_t lenA,
     while (1) {
         while (*A < *B) {
 SKIP_FIRST_COMPARE:
-            if (++A == endA) return (out - initout);
+            if (++A == endA) return (int32_t)(out - initout);
         }
         while (*A > *B) {
-            if (++B == endB) return (out - initout);
+            if (++B == endB) return (int32_t)(out - initout);
         }
         if (*A == *B) {
             *out++ = *A;
-            if (++A == endA || ++B == endB) return (out - initout);
+            if (++A == endA || ++B == endB) return (int32_t)(out - initout);
         } else {
             goto SKIP_FIRST_COMPARE;
         }
     }
-    return (out - initout);  /* NOTREACHED */
+    return (int32_t)(out - initout);  /* NOTREACHED */
 }
 
 
