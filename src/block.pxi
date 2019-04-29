@@ -928,6 +928,7 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 					self.buf.dense[BITSLOT(x + 1)] << (BITSIZE - leftover))
 		return result
 	elif self.state == POSITIVE:
+
 		result = binarysearch(self.buf.sparse, 0, self.cardinality, x)
 		if result >= 0:
 			return result + 1
@@ -936,12 +937,12 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 	elif self.state == INVERTED:
 		size = BLOCKSIZE - self.cardinality
 		if size == 0:
-			return x - 1
+			return x + 1
 		result = binarysearch(self.buf.sparse, 0, size, x)
 		if result >= 0:
-			return x - result - 1
+			return x - result
 		else:
-			return x + result - 1
+			return x + result + 2
 
 
 cdef int block_select(Block *self, uint16_t i) except -1:
