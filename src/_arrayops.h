@@ -2,7 +2,11 @@
 #include <stdint.h>
 
 #if defined(__SSE4_2__)
-#include <nmmintrin.h>
+    #if defined(_MSC_VER)
+        #include <intrin.h>
+    #else
+        #include <nmmintrin.h>
+    #endif
 #endif
 
 /**
@@ -14,9 +18,11 @@
 int32_t intersect_general16(const uint16_t *A, const size_t lenA,
         const uint16_t *B, const size_t lenB, uint16_t *out) {
     const uint16_t *initout = out;
+    const uint16_t *endA;
+    const uint16_t *endB;
     if (lenA == 0 || lenB == 0) return 0;
-    const uint16_t *endA = A + lenA;
-    const uint16_t *endB = B + lenB;
+    endA = A + lenA;
+    endB = B + lenB;
 
     while (1) {
         while (*A < *B) {

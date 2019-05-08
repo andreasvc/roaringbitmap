@@ -138,27 +138,6 @@ cdef inline uint32_t bitsetintersectcount(uint64_t *src1, uint64_t *src2) nogil:
 	return result
 
 
-cdef inline uint32_t bitsetunioncount(uint64_t *src1, uint64_t *src2,
-		uint32_t src1card, uint32_t src2card) nogil:
-	"""return the cardinality of the union of dest and src.
-
-	:returns: number of set bits in result.
-	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
-	cdef uint32_t intersection_count = bitsetintersectcount(src1, src2)
-	return <size_t>src1card + src2card - intersection_count
-
-
-cdef inline void bitsetintersectunioncount(uint64_t *src1, uint64_t *src2,
-		uint32_t src1card, uint32_t src2card,
-		uint32_t *intersection_count, uint32_t *union_count) nogil:
-	"""Compute the cardinalities of the intersection and union of dest and src.
-
-	:returns: number of set bits in result.
-	Both operands are assumed to have a fixed number of bits ``BLOCKSIZE``."""
-	intersection_count[0] = bitsetintersectcount(src1, src2)
-	union_count[0] = <size_t>src1card + src2card - intersection_count[0]
-
-
 # Other operations
 cdef inline int iteratesetbits(uint64_t *vec,
 		uint64_t *cur, int *idx) nogil:

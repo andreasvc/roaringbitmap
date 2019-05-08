@@ -36,7 +36,7 @@ in an efficiently serializable, contiguous block of memory.
 #     slower in benchmarks
 # [ ] check growth strategy of arrays
 # [ ] more operations:
-#     [ ] effcient shifts
+#     [ ] efficient shifts
 #     [ ] operate on slices without instantiating range as temp object
 # [ ] subclass Set ABC?
 # [ ] error checking, robustness
@@ -781,13 +781,13 @@ cdef class RoaringBitmap(object):
 
 		:param i: a 0-based index."""
 		cdef Block b1
-		cdef int leftover = i
+		cdef uint32_t leftover = <uint32_t>i
 		cdef uint32_t n, keycontrib, lowcontrib
 		if i < 0:
 			raise IndexError('select: index %d out of range 0..%d.' % (
 					i, len(self)))
 		for n in range(self.size):
-			if <int>self.data[n].cardinality > leftover:
+			if self.data[n].cardinality > leftover:
 				keycontrib = self.keys[n] << 16
 				lowcontrib = block_select(
 						self._getblk(n, &b1),

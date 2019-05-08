@@ -250,8 +250,8 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef RoaringBitmap result = RoaringBitmap()
 	cdef uint32_t pos1 = 0, pos2 = 0
 	cdef Block b1, b2
+	result._initarray(ob1.size)
 	if pos1 < ob1.size and pos2 < ob2.size:
-		result._initarray(ob1.size)
 		while True:
 			if ob1.keys[pos1] < ob2.keys[pos2]:
 				result._insertcopy(
@@ -279,6 +279,11 @@ cdef inline RoaringBitmap rb_sub(RoaringBitmap ob1, RoaringBitmap ob2):
 						result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
 		aligned_free(result.data[result.size].buf.ptr)
 		result._resize(result.size)
+	if pos2 == ob2.size:
+		while pos1 < ob1.size:
+			result._insertcopy(
+					result.size, ob1.keys[pos1], ob1._getblk(pos1, &b1))
+			pos1 += 1
 	return result
 
 

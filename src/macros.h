@@ -18,8 +18,14 @@ Fix word size at 64 bits:
 #define TESTBIT(a, b)		(((a)[BITSLOT(b)] >> (b & BITSIZE1)) & 1)
 /* NB: TESTBIT returns 0 or 1*/
 
+#ifdef _MSC_VER
+#define ALIGNED_INLINE __inline
+#else
+#define ALIGNED_INLINE inline
+#endif
+
 /* https://stackoverflow.com/q/16376942 */
-inline void* aligned_malloc(size_t size, size_t align) {
+ALIGNED_INLINE void* aligned_malloc(size_t size, size_t align) {
 	void *result;
 	#ifdef _MSC_VER
 	result = _aligned_malloc(size, align);
@@ -30,7 +36,7 @@ inline void* aligned_malloc(size_t size, size_t align) {
 	return result;
 }
 
-inline void aligned_free(void *ptr) {
+ALIGNED_INLINE void aligned_free(void *ptr) {
 	#ifdef _MSC_VER
 	_aligned_free(ptr);
 	#else

@@ -419,7 +419,8 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 				result.buf.sparse)
 		trimcapacity(result, result.cardinality)
 	elif self.state == INVERTED and other.state == POSITIVE:
-		convertalloc(result, INVERTED, other.cardinality + OVERALLOC)
+		convertalloc(result, INVERTED, BLOCKSIZE - self.cardinality
+				+ other.cardinality)
 		length = union2by2(
 				self.buf.sparse, other.buf.sparse,
 				BLOCKSIZE - self.cardinality, other.cardinality,
@@ -744,7 +745,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 	elif self.state == DENSE and other.state == DENSE:
 		return bitsubset(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == INVERTED:
-		for n in range(other.cardinality):
+		for n in range(BLOCKSIZE - other.cardinality):
 			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
 				return False
 	elif self.state == POSITIVE and other.state == DENSE:
@@ -773,7 +774,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 				return False
 	elif self.state == INVERTED and other.state == INVERTED:
 		# check if negative other array elements are subset of
-		# negative self array element
+		# negative self array elements
 		for n in range(<size_t>(BLOCKSIZE - other.cardinality)):
 			m = binarysearch(self.buf.sparse,
 					m, BLOCKSIZE - self.cardinality, other.buf.sparse[n])
@@ -873,46 +874,41 @@ cdef void block_andorlen(Block *self, Block *other,
 	"""Cardinality of both intersection and union."""
 	cdef uint32_t n
 	if self.state == DENSE and other.state == DENSE:
-		bitsetintersectunioncount(self.buf.dense, other.buf.dense,
-				self.cardinality, other.cardinality,
-				intersection_result, union_result)
+		intersection_result[0] = bitsetintersectcount(
+				self.buf.dense, other.buf.dense)
 	elif self.state == POSITIVE and other.state == POSITIVE:
 		intersection_result[0] = intersect2by2(
 				self.buf.sparse, other.buf.sparse,
 				self.cardinality, other.cardinality, NULL)
-		union_result[0] = (<size_t>self.cardinality + other.cardinality
-				- intersection_result[0])
-	elif self.state == INVERTED and other.state == INVERTED:
-		union_result[0] = intersect2by2(
-				self.buf.sparse, other.buf.sparse,
-				self.cardinality, other.cardinality, NULL)
-		union_result[0] = BLOCKSIZE - union_result[0]
-		intersection_result[0] = BLOCKSIZE - (<size_t>self.cardinality
-				+ other.cardinality - union_result[0])
 	elif self.state == DENSE and other.state == POSITIVE:
 		for n in range(other.cardinality):
 			intersection_result[0] += TESTBIT(
 					self.buf.dense, other.buf.sparse[n])
-		union_result[0] = (<size_t>self.cardinality + other.cardinality
-				- intersection_result[0])
 	elif self.state == DENSE and other.state == INVERTED:
 		intersection_result[0] = self.cardinality
 		for n in range(BLOCKSIZE - other.cardinality):
 			intersection_result[0] -= TESTBIT(
 					self.buf.dense, other.buf.sparse[n])
-		union_result[0] = BLOCKSIZE - (<size_t>self.cardinality
-				+ other.cardinality - intersection_result[0])
 	elif self.state == POSITIVE and other.state == INVERTED:
-		symmetricdifflen(other.buf.sparse, self.buf.sparse,
-				BLOCKSIZE - other.cardinality, self.cardinality,
-				union_result, intersection_result)
-		union_result[0] = BLOCKSIZE - union_result[0]
-	elif self.state == POSITIVE and other.state == DENSE:
+		intersection_result[0] = difference(
+				self.buf.sparse, other.buf.sparse,
+				self.cardinality, BLOCKSIZE - other.cardinality,
+				NULL)
+	elif self.state == INVERTED and other.state == INVERTED:
+		union_result[0] = BLOCKSIZE - intersect2by2(
+				self.buf.sparse, other.buf.sparse,
+				BLOCKSIZE - self.cardinality, BLOCKSIZE - other.cardinality,
+				NULL)
+		intersection_result[0] = ((<size_t>self.cardinality + other.cardinality)
+				- union_result[0])
+		return
+	elif ((self.state == POSITIVE and other.state == DENSE)
+			or (self.state == INVERTED and other.state == DENSE)
+			or (self.state == INVERTED and other.state == POSITIVE)):
 		block_andorlen(other, self, intersection_result, union_result)
-	elif self.state == INVERTED and other.state == DENSE:
-		block_andorlen(other, self, intersection_result, union_result)
-	elif self.state == INVERTED and other.state == POSITIVE:
-		block_andorlen(other, self, intersection_result, union_result)
+		return
+	union_result[0] = (<size_t>self.cardinality + other.cardinality
+			- intersection_result[0])
 
 
 cdef int block_rank(Block *self, uint16_t x) nogil:
@@ -967,16 +963,24 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 			return i + (self.buf.sparse[0] <= i)
 		if self.buf.sparse[0] > i:
 			return i
-		# find the pair of non-members between which the i'th member lies
-		# FIXME: use custom binary search
-		for n in range(1, size):
-			# subtract n because this inverted block stores n non-members
-			if self.buf.sparse[n] - n > i:
-				# result lies between value at n-1 and n
-				# add rest of i not covered by values up to n-1
-				w = self.buf.sparse[n - 1]
-				return w + (i - (w - (n - 1))) + 1
-		return self.buf.sparse[size - 1] + i + 1
+		# FIXME: HACK
+		buf = block_asdense(self)
+		for n in range(BLOCKSIZE // BITSIZE):
+			w = bit_popcount(buf.dense[n])
+			if w > i:
+				return BITSIZE * n + select64(buf.dense[n], i)
+			i -= w
+		aligned_free(buf.ptr)
+		# # find the pair of non-members between which the i'th member lies
+		# # FIXME: use custom binary search
+		# for n in range(1, size):
+		# 	# subtract n because this inverted block stores n non-members
+		# 	if self.buf.sparse[n] - n > i:
+		# 		# result lies between value at n-1 and n
+		# 		# add rest of i not covered by values up to n-1
+		# 		w = self.buf.sparse[n - 1]
+		# 		return w + (i - (w - (n - 1))) + 1
+		# return self.buf.sparse[size - 1] + i + 1
 
 
 cdef Block *block_copy(Block *dest, Block *src) nogil:

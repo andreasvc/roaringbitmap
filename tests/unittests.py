@@ -2,10 +2,10 @@
 from __future__ import division, absolute_import, unicode_literals
 import sys
 import array
-import random
 import pytest
 import pickle
 import tempfile
+from random import seed, choice, sample, randint
 try:
 	import faulthandler
 	faulthandler.enable()
@@ -25,21 +25,21 @@ PARAMS = [
 		('empty', 0, (1 << 16) - 1),
 		('positive', 200, (1 << 16) - 1),
 		('dense', 5000, (1 << 16) - 1),
-		('inverted', 5000, (1 << 16) - 1),
+		('inverted', 4000, (1 << 16) - 1),
 		('many keys', 4000, (1 << 25) - 1)
 		]
 
 
 def _single():
-	random.seed(42)
+	seed(42)
 	result = []
 	for name, elements, maxnum in PARAMS:
 		if name == 'inverted':
-			result.append((name, list(set(range((1 << 16) - 1))
-				- {random.randint(0, maxnum) for _ in range(elements)})))
+			result.append((name, list(set(range(1 << 16))
+				- {randint(0, maxnum) for _ in range(elements)})))
 		else:
 			result.append((name, sorted(
-				random.randint(0, maxnum) for _ in range(elements))))
+				randint(0, maxnum) for _ in range(elements))))
 	return result
 
 
@@ -53,23 +53,35 @@ def pair():
 	result = []
 	for name1, a in _single():
 		for name2, b in _single():
-			b = sorted(b[:len(b) // 2] + a[len(a) // 2:])
+			if name2 != 'empty':
+				b = sorted(b[:len(b) // 2] + a[len(a) // 2:])
 			result.append((name1 + ':' + name2, a, b))
 	return result
 
 
 @pytest.fixture(scope='module')
 def multi():
-	a = sorted(random.randint(0, 2000)
-			for _ in range(random.randint(100, 2000)))
-	result = [sorted([random.randint(0, 2000)
-			for _ in range(random.randint(100, 2000))] + a)
+	a = sorted(randint(0, 2000)
+			for _ in range(randint(100, 2000)))
+	result = [sorted([randint(0, 2000)
+			for _ in range(randint(100, 2000))] + a)
 			for _ in range(100)]
 	return result
 
 
 def abbr(a):
 	return a[:500] + '...' + a[-500:]
+
+
+def test_fixtures(single):
+	for name, data in single:
+		rb = RoaringBitmap(data)
+		if name == 'many keys':
+			assert len(rb._keys()) > 100
+		elif name == 'empty':
+			assert len(rb) == 0
+		else:
+			assert name[0].upper() in rb.debuginfo()
 
 
 def test_bitcount():
@@ -290,7 +302,8 @@ class Test_roaringbitmap(object):
 			ref, rb = set(data2[:k]), RoaringBitmap(data2[:k])
 			refans = ref <= ref2
 			assert (set(rb) <= ref2) == refans, name
-			assert (rb <= rb2) == refans, name
+			assert (ref <= set(rb2)) == refans, name
+			assert (rb <= rb2) == refans, (name, rb.debuginfo())
 
 	def test_disjoint(self, pair):
 		for name, data1, data2 in pair:
@@ -307,7 +320,7 @@ class Test_roaringbitmap(object):
 		for name, data in single:
 			if len(data) == 0:
 				continue
-			a, b = sorted(random.sample(data, 2))
+			a, b = sorted(sample(data, 2))
 			ref = set(data).intersection(range(a, b))
 			rb = RoaringBitmap(data).intersection(range(a, b))
 			rb2 = RoaringBitmap(data).clamp(a, b)
@@ -370,11 +383,10 @@ class Test_roaringbitmap(object):
 				continue
 			ref, ref2 = set(data1), set(data2)
 			rb, rb2 = RoaringBitmap(data1), RoaringBitmap(data2)
-			assert abs((len(ref & ref2) / float(len(ref | ref2)))
-					- rb.intersection_len(rb2)
-					/ float(rb.union_len(rb2))) < 0.001, name
-			assert abs((1 - (len(ref & ref2) / float(len(ref | ref2))))
-					- rb.jaccard_dist(rb2)) < 0.001, name
+			assert len(ref & ref2) / float(len(ref | ref2)) == pytest.approx(
+					rb.intersection_len(rb2) / float(rb.union_len(rb2))), name
+			assert (1 - (len(ref & ref2) / float(len(ref | ref2)))
+					== pytest.approx(rb.jaccard_dist(rb2))), name
 
 	def test_rank(self, single):
 		for name, data in single:
@@ -383,7 +395,7 @@ class Test_roaringbitmap(object):
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
 			for _ in range(10):
-				x = random.choice(ref)
+				x = choice(ref)
 				assert x in rb, name
 				assert rb.rank(x) == ref.index(x) + 1, name
 
@@ -394,7 +406,7 @@ class Test_roaringbitmap(object):
 			ref = sorted(set(data))
 			rb = RoaringBitmap(data)
 			lrb = list(rb)
-			idx = [random.randint(0, len(ref) - 1) for _ in range(10)]
+			idx = [randint(0, len(ref) - 1) for _ in range(10)]
 			for i in idx:
 				assert lrb[i] == ref[i], (name, i, len(ref))
 				assert rb.select(i) in rb, name
@@ -646,11 +658,10 @@ class Test_immutablerb(object):
 			ref, ref2 = set(data1), set(data2)
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
-			assert abs((len(ref & ref2) / float(len(ref | ref2)))
-					- rb.intersection_len(rb2)
-					/ float(rb.union_len(rb2))) < 0.001, name
-			assert abs((1 - (len(ref & ref2) / float(len(ref | ref2))))
-					- rb.jaccard_dist(rb2)) < 0.001, name
+			assert len(ref & ref2) / float(len(ref | ref2)) == pytest.approx(
+					rb.intersection_len(rb2) / float(rb.union_len(rb2))), name
+			assert (1 - (len(ref & ref2) / float(len(ref | ref2)))
+					== pytest.approx(rb.jaccard_dist(rb2))), name
 
 	def test_rank(self, single):
 		for name, data in single:
@@ -659,7 +670,7 @@ class Test_immutablerb(object):
 			ref = sorted(set(data))
 			rb = ImmutableRoaringBitmap(data)
 			for _ in range(10):
-				x = random.choice(ref)
+				x = choice(ref)
 				assert x in rb, name
 				assert rb.rank(x) == ref.index(x) + 1, name
 
@@ -671,7 +682,7 @@ class Test_immutablerb(object):
 			rb = ImmutableRoaringBitmap(data)
 			lrb = list(rb)
 			idx = [0, 1, 2] + [
-					random.randint(0, len(ref) - 1) for _ in range(10)] + [
+					randint(0, len(ref) - 1) for _ in range(10)] + [
 					len(ref) - 1, len(ref) - 2]
 			for i in idx:
 				assert lrb[i] == ref[i], name
@@ -749,7 +760,7 @@ class Test_multirb(object):
 		assert res2 == ref2
 
 	def test_clamp(self, multi):
-		a, b = sorted(random.sample(multi[0], 2))
+		a, b = sorted(sample(multi[0], 2))
 		ref = set.intersection(
 				*[set(x) for x in multi]) & set(range(a, b))
 		mrb = MultiRoaringBitmap([RoaringBitmap(x) for x in multi])
@@ -775,7 +786,7 @@ class Test_multirb(object):
 	def test_multi1(self):
 		for_multi = []
 		for i in range(5):
-			for_multi += [RoaringBitmap(random.sample(range(99999), 200))]
+			for_multi += [RoaringBitmap(sample(range(99999), 200))]
 		mrb = MultiRoaringBitmap(for_multi)
 		assert len(mrb) == 5
 		assert mrb[4] == for_multi[4]
@@ -791,7 +802,7 @@ class Test_multirb(object):
 		for x in range(3):
 			for_multi = []
 			for i in range(5):
-				for_multi += [RoaringBitmap(random.sample(range(99999), 200))]
+				for_multi += [RoaringBitmap(sample(range(99999), 200))]
 			mrb = MultiRoaringBitmap(for_multi)
 			for_multi_pre += [mrb[0], mrb[1]]
 
