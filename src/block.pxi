@@ -745,7 +745,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 	elif self.state == DENSE and other.state == DENSE:
 		return bitsubset(self.buf.dense, other.buf.dense)
 	elif self.state == DENSE and other.state == INVERTED:
-		for n in range(BLOCKSIZE - other.cardinality):
+		for n in range(<size_t>(BLOCKSIZE - other.cardinality)):
 			if TESTBIT(self.buf.dense, other.buf.sparse[n]):
 				return False
 	elif self.state == POSITIVE and other.state == DENSE:
