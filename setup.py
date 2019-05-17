@@ -33,11 +33,11 @@ with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.6',
+		version='0.7',
 		description='Roaring Bitmap',
 		long_description=README,
 		author='Andreas van Cranenburgh',
-		author_email='A.W.vanCranenburgh@uva.nl',
+		author_email='A.W.van.Cranenburgh@rug.nl',
 		url='http://roaringbitmap.readthedocs.io',
 		license='GPL',
 		platforms=['Many'],
@@ -92,30 +92,28 @@ if __name__ == '__main__':
 		if DEBUG:
 			directives.update(wraparound=True, boundscheck=True)
 			if sys.platform == 'win32':
-				extra_compile_args += ['-DEBUG', '-O0']
+				extra_compile_args += ['-DDEBUG', '-Od', '-Zi']
+				extra_link_args += ['-DEBUG']
 			else:
 				extra_compile_args += ['-g', '-O0',
 						# '-fsanitize=address', '-fsanitize=undefined',
 						'-fno-omit-frame-pointer']
-			extra_link_args += ['-g']
+				extra_link_args += ['-g']
 		ext_modules = cythonize(
 				[Extension(
 					'*',
 					sources=['src/*.pyx'],
 					extra_compile_args=extra_compile_args,
-					extra_link_args=extra_link_args,
-					)],
+					extra_link_args=extra_link_args)],
 				annotate=True,
 				compiler_directives=directives,
-				language_level=3,
-		)
+				language_level=3)
 	else:
 		ext_modules = [Extension(
 				'roaringbitmap',
 				sources=['src/roaringbitmap.c'],
 				extra_compile_args=extra_compile_args,
-				extra_link_args=extra_link_args,
-				)]
+				extra_link_args=extra_link_args)]
 	setup(
 			cmdclass=cmdclass,
 			ext_modules=ext_modules,
