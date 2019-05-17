@@ -439,8 +439,10 @@ class Test_roaringbitmap(object):
 		assert rb[0] == 0x10000
 		rb.discard(0x10010)
 		assert rb[0] == 0x10000
+		rb = RoaringBitmap(range(0x10, 0xffff + 1))
+		assert rb[0] == 0x10, rb.debuginfo(True)
 		rb = RoaringBitmap(range(0x10010, 0x1ffff + 1))
-		assert rb[0] == 0x10010
+		assert rb[0] == 0x10010, rb.debuginfo(True)
 		lst = list(range(1, 0xccbb))
 		lst.extend(range(0xcccc, 0xfffc))
 		rb = RoaringBitmap(lst)

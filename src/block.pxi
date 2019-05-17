@@ -924,7 +924,6 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 					self.buf.dense[BITSLOT(x + 1)] << (BITSIZE - leftover))
 		return result
 	elif self.state == POSITIVE:
-
 		result = binarysearch(self.buf.sparse, 0, self.cardinality, x)
 		if result >= 0:
 			return result + 1
@@ -961,26 +960,7 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 			return i
 		elif size == 1:
 			return i + (self.buf.sparse[0] <= i)
-		if self.buf.sparse[0] > i:
-			return i
-		# FIXME: HACK
-		buf = block_asdense(self)
-		for n in range(BLOCKSIZE // BITSIZE):
-			w = bit_popcount(buf.dense[n])
-			if w > i:
-				return BITSIZE * n + select64(buf.dense[n], i)
-			i -= w
-		aligned_free(buf.ptr)
-		# # find the pair of non-members between which the i'th member lies
-		# # FIXME: use custom binary search
-		# for n in range(1, size):
-		# 	# subtract n because this inverted block stores n non-members
-		# 	if self.buf.sparse[n] - n > i:
-		# 		# result lies between value at n-1 and n
-		# 		# add rest of i not covered by values up to n-1
-		# 		w = self.buf.sparse[n - 1]
-		# 		return w + (i - (w - (n - 1))) + 1
-		# return self.buf.sparse[size - 1] + i + 1
+		return selectbinarysearch(self.buf.sparse, 0, size, i)
 
 
 cdef Block *block_copy(Block *dest, Block *src) nogil:
