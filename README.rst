@@ -141,11 +141,3 @@ References
   pp. 709-719. http://arxiv.org/abs/1402.6407
 - The idea of using the inverted list representation is based on
   https://issues.apache.org/jira/browse/LUCENE-5983
-
-  For a comparison of roaring bitmaps and inverted lists,
-  see the following paper (which however does not consider using both):
-
-  Wang, J., Lin, C., Papakonstantinou, Y., & Swanson, S. (2017, May). An
-  Experimental Study of Bitmap Compression vs. Inverted List Compression. In
-  Proceedings of the 2017 ACM International Conference on Management of Data
-  (pp. 993-1008). http://db.ucsd.edu/wp-content/uploads/2017/03/sidm338-wangA.pdf
