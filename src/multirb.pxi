@@ -197,7 +197,7 @@ cdef class MultiRoaringBitmap(object):
 
 		:param start: optional start index.
 		:param stop: optional end index;
-			if given, only return elements `n` s.t. ``start <= n < stop``.
+			if given, only return elements ``n`` s.t. ``start <= n < stop``.
 		:returns: the intersection as a mutable RoaringBitmap.
 			Returns ``None`` when an invalid index is encountered or an empty
 			result is obtained.
@@ -290,9 +290,9 @@ cdef class MultiRoaringBitmap(object):
 		:param indices2: input array
 		:returns: a Python array of floats with the jaccard distances.
 
-		``indices1 and ``indices2`` should be arrays of unsigned long integers,
-		created with ``array.array('L')``. Ensure that all indices `i`
-		are in the range ``0 <= i < len(self)``.
+		``indices1`` and ``indices2`` should be arrays of unsigned long
+		integers, created with ``array.array('L')``. Ensure that all indices
+		`i` are in the range ``0 <= i < len(self)``.
 		"""
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef array.array result = array.clone(dblarray, len(indices1), False)
