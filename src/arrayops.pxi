@@ -377,8 +377,8 @@ cdef int xor2by2(uint16_t *data1, uint16_t *data2,
 	return pos
 
 
-cdef inline int selectbinarysearch(uint16_t *data, int begin, int end,
-		uint16_t i) nogil:
+cdef inline int selectinvertedbinarysearch(
+		uint16_t *data, int begin, int end, uint16_t i) nogil:
 	"""Custom binary search to find i'th member given array of non-members."""
 	# 0 1 2   3 4 5   6 7  8    9 10 ... indices
 	#       0       1         2      ... inverted: indices
@@ -388,6 +388,10 @@ cdef inline int selectbinarysearch(uint16_t *data, int begin, int end,
 	cdef int high = end - 1
 	cdef int middleidx
 	cdef uint16_t middleval
+	if end == 0 or data[0] > i:
+		return i
+	elif data[high] - high <= i:
+		return i + high + 1
 	# find the pair of non-members between which the i'th member lies
 	while low < high:
 		middleidx = (low + high) >> 1
@@ -397,4 +401,4 @@ cdef inline int selectbinarysearch(uint16_t *data, int begin, int end,
 		else:
 			low = middleidx + 1
 	# compute member given index
-	return data[low] + (i - (data[low] - low)) + (low == end - 1)
+	return i + low

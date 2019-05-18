@@ -942,7 +942,7 @@ cdef int block_rank(Block *self, uint16_t x) nogil:
 
 cdef int block_select(Block *self, uint16_t i) except -1:
 	"""Find smallest x s.t. rank(x) >= i."""
-	cdef int n, size, w = 0
+	cdef int n, w = 0
 	if i >= self.cardinality:
 		raise IndexError('select: index %d out of range 0..%d.' % (
 				i, self.cardinality))
@@ -955,12 +955,8 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 	elif self.state == POSITIVE:
 		return self.buf.sparse[i]
 	elif self.state == INVERTED:
-		size = BLOCKSIZE - self.cardinality
-		if size == 0:
-			return i
-		elif size == 1:
-			return i + (self.buf.sparse[0] <= i)
-		return selectbinarysearch(self.buf.sparse, 0, size, i)
+		return selectinvertedbinarysearch(
+				self.buf.sparse, 0, BLOCKSIZE - self.cardinality, i)
 
 
 cdef Block *block_copy(Block *dest, Block *src) nogil:
