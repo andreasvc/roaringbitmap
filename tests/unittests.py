@@ -811,3 +811,13 @@ class Test_multirb(object):
 		assert type(for_multi_pre) is list
 		for_multi_pre[-1]
 		list(for_multi_pre)
+
+	def test_eq(self, multi):
+		orig = [RoaringBitmap(a) for a in multi]
+		mrb = MultiRoaringBitmap(orig)
+		mrb2 = MultiRoaringBitmap(orig)
+		mrb3 = MultiRoaringBitmap(orig[1:])
+		assert mrb == orig
+		assert mrb == mrb2
+		assert mrb != orig[1:]
+		assert mrb != mrb3

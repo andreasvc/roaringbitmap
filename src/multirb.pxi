@@ -83,6 +83,24 @@ cdef class MultiRoaringBitmap(object):
 			self._ob.flush()
 		releasebuf(&buffer)
 
+	def __richcmp__(x, y, int op):
+		if x is None or y is None:
+			if op == 2 or op == 3:
+				return op == 3
+			raise TypeError
+		if (not isinstance(x, (MultiRoaringBitmap, list))
+				or not isinstance(y, (MultiRoaringBitmap, list))):
+			raise TypeError
+		if op == 2:  # ==
+			if len(x) != len(y):
+				return False
+			return all(a == b for a, b in zip(x, y))
+		elif op == 3:  # !=
+			if len(x) != len(y):
+				return True
+			return not all(a == b for a, b in zip(x, y))
+		return NotImplemented
+
 	def close(self):
 		"""Close opened file, if any."""
 		if hasattr(self._ob, 'close'):
