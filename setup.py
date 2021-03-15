@@ -6,20 +6,11 @@ from distutils.extension import Extension
 
 PY2 = sys.version_info[0] == 2
 
-# In releases, include C sources but not Cython sources; otherwise, use cython
-# to figure out which files may need to be re-cythonized.
-USE_CYTHON = os.path.exists('src/roaringbitmap.pyx')
-if USE_CYTHON:
-	try:
-		from Cython.Build import cythonize
-		from Cython.Distutils import build_ext
-		from Cython.Compiler import Options
-		Options.fast_fail = True
-	except ImportError:
-		raise RuntimeError('could not import Cython.')
-	cmdclass = dict(build_ext=build_ext)
-else:
-	cmdclass = dict()
+from Cython.Build import cythonize
+from Cython.Distutils import build_ext
+from Cython.Compiler import Options
+Options.fast_fail = True
+cmdclass = dict(build_ext=build_ext)
 
 DEBUG = '--debug' in sys.argv
 if DEBUG:
@@ -88,32 +79,25 @@ if __name__ == '__main__':
 		extra_compile_args += ['-O3', '-DNDEBUG']
 		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
 		extra_link_args += ['-DNDEBUG']
-	if USE_CYTHON:
-		if DEBUG:
-			directives.update(wraparound=True, boundscheck=True)
-			if sys.platform == 'win32':
-				extra_compile_args += ['-DDEBUG', '-Od', '-Zi']
-				extra_link_args += ['-DEBUG']
-			else:
-				extra_compile_args += ['-g', '-O0',
-						# '-fsanitize=address', '-fsanitize=undefined',
-						'-fno-omit-frame-pointer']
-				extra_link_args += ['-g']
-		ext_modules = cythonize(
-				[Extension(
-					'*',
-					sources=['src/*.pyx'],
-					extra_compile_args=extra_compile_args,
-					extra_link_args=extra_link_args)],
-				annotate=True,
-				compiler_directives=directives,
-				language_level=3)
-	else:
-		ext_modules = [Extension(
-				'roaringbitmap',
-				sources=['src/roaringbitmap.c'],
+	if DEBUG:
+		directives.update(wraparound=True, boundscheck=True)
+		if sys.platform == 'win32':
+			extra_compile_args += ['-DDEBUG', '-Od', '-Zi']
+			extra_link_args += ['-DEBUG']
+		else:
+			extra_compile_args += ['-g', '-O0',
+					# '-fsanitize=address', '-fsanitize=undefined',
+					'-fno-omit-frame-pointer']
+			extra_link_args += ['-g']
+	ext_modules = cythonize(
+			[Extension(
+				'*',
+				sources=['src/*.pyx'],
 				extra_compile_args=extra_compile_args,
-				extra_link_args=extra_link_args)]
+				extra_link_args=extra_link_args)],
+			annotate=True,
+			compiler_directives=directives,
+			language_level=3)
 	setup(
 			cmdclass=cmdclass,
 			ext_modules=ext_modules,
