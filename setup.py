@@ -33,7 +33,7 @@ with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.7',
+		version='0.7.1',
 		description='Roaring Bitmap',
 		long_description=README,
 		author='Andreas van Cranenburgh',
