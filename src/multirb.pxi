@@ -326,3 +326,26 @@ cdef class MultiRoaringBitmap(object):
 				result.data.as_doubles[n] = (rb_jaccard_dist(ob1, ob2)
 						if self.sizes[i] and self.sizes[j] else 1)
 		return result
+
+	def jaccard_dist_single(self, RoaringBitmap rb):
+		"""Compute the Jaccard distances for `rb` with all roaring bitmaps
+		in this collection.
+
+		>>> mrb.jaccard_dist_single(RoaringBitmap([1, 6, 19, 22]))
+		array.array('d', [0.3, 0.2, 0.56])
+
+		:param rb: a roaring bitmap.
+		:returns: a Python array of floats with the jaccard distances with
+			length equal to `len(self)`.
+		"""
+		cdef ImmutableRoaringBitmap ob1, ob2
+		cdef array.array result = array.clone(dblarray, len(self), False)
+		cdef char *ptr = <char *>self.ptr
+		cdef int n
+		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
+		ob2 = ImmutableRoaringBitmap(rb)
+		with nogil:
+			for n in range(self.size):
+				ob1._setptr(&(ptr[self.offsets[n]]), self.sizes[n])
+				result.data.as_doubles[n] = rb_jaccard_dist(ob1, ob2)
+		return result
