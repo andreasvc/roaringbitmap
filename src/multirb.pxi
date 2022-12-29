@@ -341,7 +341,7 @@ cdef class MultiRoaringBitmap(object):
 		cdef ImmutableRoaringBitmap ob1, ob2
 		cdef array.array result = array.clone(dblarray, len(self), False)
 		cdef char *ptr = <char *>self.ptr
-		cdef int n
+		cdef uint32_t n
 		ob1 = ImmutableRoaringBitmap.__new__(ImmutableRoaringBitmap)
 		ob2 = ImmutableRoaringBitmap(rb)
 		with nogil:
