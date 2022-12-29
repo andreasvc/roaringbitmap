@@ -245,5 +245,6 @@ def main():
 					(numfmt % ratio) if ratio < 100 else int(ratio)))
 		print()
 
+
 if __name__ == '__main__':
 	main()

@@ -47,7 +47,6 @@ import sys
 import mmap
 import heapq
 import array
-cimport cython
 
 from libc.stdint cimport uint8_t, uint16_t, uint32_t, uint64_t, int32_t
 from libc.stdio cimport printf
@@ -174,7 +173,7 @@ cdef class RoaringBitmap(object):
 		cdef Block b1
 		cdef RoaringBitmap ob
 		if isinstance(iterable, RANGE):
-			_,  (start, stop, step) = iterable.__reduce__()
+			_, (start, stop, step) = iterable.__reduce__()
 			if 0 <= start < stop and step >= 1:
 				self._initrange(start, stop, step)
 				return

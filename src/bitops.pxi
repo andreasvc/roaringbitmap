@@ -126,7 +126,8 @@ cdef inline void bitsetsubtractnocard(uint64_t *dest,
 
 
 # Count cardinality only
-cdef inline uint32_t bitsetintersectcount(uint64_t *src1, uint64_t *src2) nogil:
+cdef inline uint32_t bitsetintersectcount(
+		uint64_t *src1, uint64_t *src2) nogil:
 	"""return the cardinality of the intersection of dest and src.
 
 	:returns: number of set bits in result.
