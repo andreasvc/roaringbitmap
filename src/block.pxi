@@ -438,7 +438,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 		trimcapacity(result, length)
 	elif self.state == DENSE and other.state == INVERTED:
 		convertalloc(result, POSITIVE, BLOCKSIZE - other.cardinality)
-		for n in range(other.cardinality):
+		for n in range(BLOCKSIZE - other.cardinality):
 			elem = other.buf.sparse[n]
 			result.buf.sparse[length] = elem
 			length += TESTBIT(self.buf.dense, elem)
@@ -687,7 +687,7 @@ cdef void block_isub(Block *self, Block *other) nogil:
 	elif self.state == DENSE and other.state == INVERTED:
 		alloc = BLOCKSIZE - other.cardinality
 		buf.sparse = allocsparse(alloc)
-		for n in range(other.cardinality):
+		for n in range(BLOCKSIZE - other.cardinality):
 			elem = other.buf.sparse[n]
 			buf.sparse[length] = elem
 			length += TESTBIT(self.buf.dense, elem)

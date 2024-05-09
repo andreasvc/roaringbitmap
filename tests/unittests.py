@@ -537,6 +537,16 @@ class Test_roaringbitmap(object):
 		r = rbm.clamp(0, 8388607)
 		assert len(r) == 0
 
+	def test_issue34(self):
+		seed(232992)
+		set_a = sample(range(235342), k=169308)
+		set_b = sample(range(255999), k=255713)
+		rba = RoaringBitmap(set_a)
+		rbb = RoaringBitmap(set_b)
+		assert rba - rbb == set(set_a) - set(set_b)
+		rba -= rbb
+		assert rba == set(set_a) - set(set_b)
+
 
 class Test_immutablerb(object):
 	def test_inittrivial(self):
