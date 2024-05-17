@@ -49,7 +49,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		# FIXME: 32 byte alignment depends on state.data being aligned.
 		self._setptr(state.data.as_chars, len(state))
 
-	cdef void _setptr(self, char *ptr, size_t size) nogil:
+	cdef void _setptr(self, char *ptr, size_t size) noexcept nogil:
 		self.ptr = ptr
 		self.offset = <size_t>ptr
 		self.bufsize = size

@@ -452,7 +452,8 @@ cdef inline RoaringBitmap rb_clamp(RoaringBitmap self,
 
 
 cdef inline void rb_andor_len(RoaringBitmap ob1, RoaringBitmap ob2,
-		unsigned long *intersection_result, unsigned long *union_result) nogil:
+		unsigned long *intersection_result,
+		unsigned long *union_result) noexcept nogil:
 	cdef Block b1, b2
 	cdef uint32_t pos1 = 0, pos2 = 0, tmp1, tmp2
 	union_result[0] = intersection_result[0] = 0
@@ -488,7 +489,8 @@ cdef inline void rb_andor_len(RoaringBitmap ob1, RoaringBitmap ob2,
 			union_result[0] += ob1.data[pos1].cardinality
 
 
-cdef inline double rb_jaccard_dist(RoaringBitmap ob1, RoaringBitmap ob2) nogil:
+cdef inline double rb_jaccard_dist(RoaringBitmap ob1,
+		RoaringBitmap ob2) noexcept nogil:
 	cdef unsigned long union_result = 0, intersection_result = 0
 	rb_andor_len(ob1, ob2, &intersection_result, &union_result)
 	if union_result == 0:

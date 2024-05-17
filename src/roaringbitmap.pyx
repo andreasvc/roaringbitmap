@@ -1113,7 +1113,7 @@ cdef class RoaringBitmap(object):
 					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1], (
 							m, b2.buf.sparse[m], b2.buf.sparse[m + 1])
 
-	cdef inline Block *_getblk(self, int i, Block *tmp) nogil:
+	cdef inline Block *_getblk(self, int i, Block *tmp) noexcept nogil:
 		"""Get pointer to block `i`. If there is an offset, copy this block
 		to ``tmp`` and add offset to its pointer, otherwise return block itself.
 		"""
@@ -1136,19 +1136,19 @@ cdef inline RoaringBitmap ensurerb(obj):
 	return RoaringBitmap(obj)
 
 
-cdef inline uint16_t highbits(uint32_t x) nogil:
+cdef inline uint16_t highbits(uint32_t x) noexcept nogil:
 	return x >> 16
 
 
-cdef inline uint16_t lowbits(uint32_t x) nogil:
+cdef inline uint16_t lowbits(uint32_t x) noexcept nogil:
 	return x & 0xFFFF
 
 
-cdef inline uint32_t min(uint32_t a, uint32_t b) nogil:
+cdef inline uint32_t min(uint32_t a, uint32_t b) noexcept nogil:
 	return a if a <= b else b
 
 
-cdef inline uint32_t max(uint32_t a, uint32_t b) nogil:
+cdef inline uint32_t max(uint32_t a, uint32_t b) noexcept nogil:
 	return a if a >= b else b
 
 

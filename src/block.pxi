@@ -11,7 +11,7 @@ cdef inline bint block_contains(Block *self, uint16_t elem) nogil:
 	return found
 
 
-cdef inline void block_add(Block *self, uint16_t elem) nogil:
+cdef inline void block_add(Block *self, uint16_t elem) noexcept nogil:
 	cdef int i
 	if self.state == DENSE:
 		setbitcard(self.buf.dense, elem, &self.cardinality)
@@ -26,7 +26,7 @@ cdef inline void block_add(Block *self, uint16_t elem) nogil:
 			remove(self, i)
 
 
-cdef inline void block_discard(Block *self, uint16_t elem) nogil:
+cdef inline void block_discard(Block *self, uint16_t elem) noexcept nogil:
 	cdef int i
 	if self.state == DENSE:
 		clearbitcard(self.buf.dense, elem, &self.cardinality)
@@ -80,7 +80,8 @@ cdef uint64_t block_pop(Block *self) except BLOCKSIZE:
 
 
 cdef void block_initrange(
-		Block *self, uint16_t start, uint32_t stop, uint32_t step) nogil:
+		Block *self, uint16_t start, uint32_t stop,
+		uint32_t step) noexcept nogil:
 	"""Allocate block and set a range of elements."""
 	cdef uint32_t n, m, a, b
 	cdef uint64_t mask = 0
@@ -224,7 +225,7 @@ cdef void block_clamp(
 		result.cardinality = alloc
 
 
-cdef void block_and(Block *result, Block *self, Block *other) nogil:
+cdef void block_and(Block *result, Block *self, Block *other) noexcept nogil:
 	"""Non-inplace intersection; result may be preallocated."""
 	cdef uint32_t n, alloc, length = 0
 	cdef uint16_t elem
@@ -284,7 +285,7 @@ cdef void block_and(Block *result, Block *self, Block *other) nogil:
 		block_iand(block_copy(result, other), self)
 
 
-cdef void block_or(Block *result, Block *self, Block *other) nogil:
+cdef void block_or(Block *result, Block *self, Block *other) noexcept nogil:
 	"""Non-inplace union; result may be preallocated."""
 	cdef uint32_t alloc, length = 0
 	if self.state == DENSE and other.state == DENSE:
@@ -338,7 +339,7 @@ cdef void block_or(Block *result, Block *self, Block *other) nogil:
 		block_ior(block_copy(result, self), other)
 
 
-cdef void block_xor(Block *result, Block *self, Block *other) nogil:
+cdef void block_xor(Block *result, Block *self, Block *other) noexcept nogil:
 	"""Non-inplace xor; result may be preallocated."""
 	cdef int alloc
 	cdef size_t n
@@ -386,7 +387,7 @@ cdef void block_xor(Block *result, Block *self, Block *other) nogil:
 		block_ixor(block_copy(result, other), self)
 
 
-cdef void block_sub(Block *result, Block *self, Block *other) nogil:
+cdef void block_sub(Block *result, Block *self, Block *other) noexcept nogil:
 	"""Non-inplace subtract; result may be preallocated."""
 	cdef uint32_t n, alloc, length = 0
 	cdef uint16_t elem
@@ -454,7 +455,7 @@ cdef void block_sub(Block *result, Block *self, Block *other) nogil:
 		block_isub(block_copy(result, self), other)
 
 
-cdef void block_iand(Block *self, Block *other) nogil:
+cdef void block_iand(Block *self, Block *other) noexcept nogil:
 	cdef Buffer buf
 	cdef uint32_t n, alloc, length = 0
 	cdef uint16_t elem
@@ -537,7 +538,7 @@ cdef void block_iand(Block *self, Block *other) nogil:
 	block_convert(self)
 
 
-cdef void block_ior(Block *self, Block *other) nogil:
+cdef void block_ior(Block *self, Block *other) noexcept nogil:
 	cdef Buffer buf
 	cdef uint32_t n, alloc, length = 0
 	cdef uint16_t elem
@@ -623,7 +624,7 @@ cdef void block_ior(Block *self, Block *other) nogil:
 	block_convert(self)
 
 
-cdef void block_ixor(Block *self, Block *other) nogil:
+cdef void block_ixor(Block *self, Block *other) noexcept nogil:
 	cdef Buffer buf
 	cdef uint32_t n, length = 0, alloc
 	if ((self.state == POSITIVE and other.state == DENSE)
@@ -670,7 +671,7 @@ cdef void block_ixor(Block *self, Block *other) nogil:
 	block_convert(self)
 
 
-cdef void block_isub(Block *self, Block *other) nogil:
+cdef void block_isub(Block *self, Block *other) noexcept nogil:
 	cdef Buffer buf
 	cdef uint32_t n, alloc, length = 0,
 	cdef uint16_t elem
@@ -737,7 +738,7 @@ cdef void block_isub(Block *self, Block *other) nogil:
 	block_convert(self)
 
 
-cdef bint block_issubset(Block *self, Block *other) nogil:
+cdef bint block_issubset(Block *self, Block *other) noexcept nogil:
 	cdef int m = 0
 	cdef size_t n
 	if self.cardinality > other.cardinality:
@@ -789,7 +790,7 @@ cdef bint block_issubset(Block *self, Block *other) nogil:
 	return True
 
 
-cdef bint block_isdisjoint(Block *self, Block *other) nogil:
+cdef bint block_isdisjoint(Block *self, Block *other) noexcept nogil:
 	# could return counterexample, or -1 if True
 	cdef int m = 0
 	cdef uint32_t n
@@ -827,7 +828,7 @@ cdef bint block_isdisjoint(Block *self, Block *other) nogil:
 	return True
 
 
-cdef uint32_t block_andlen(Block *self, Block *other) nogil:
+cdef uint32_t block_andlen(Block *self, Block *other) noexcept nogil:
 	"""Cardinality of intersection."""
 	cdef uint32_t n, result = 0
 	if self.state == DENSE and other.state == DENSE:
@@ -863,14 +864,14 @@ cdef uint32_t block_andlen(Block *self, Block *other) nogil:
 	return result
 
 
-cdef uint32_t block_orlen(Block *self, Block *other) nogil:
+cdef uint32_t block_orlen(Block *self, Block *other) noexcept nogil:
 	"""Cardinality of union."""
 	return <size_t>self.cardinality + other.cardinality - block_andlen(
 			self, other)
 
 
 cdef void block_andorlen(Block *self, Block *other,
-		uint32_t *intersection_result, uint32_t *union_result) nogil:
+		uint32_t *intersection_result, uint32_t *union_result) noexcept nogil:
 	"""Cardinality of both intersection and union."""
 	cdef uint32_t n
 	if self.state == DENSE and other.state == DENSE:
@@ -911,7 +912,7 @@ cdef void block_andorlen(Block *self, Block *other,
 			- intersection_result[0])
 
 
-cdef int block_rank(Block *self, uint16_t x) nogil:
+cdef int block_rank(Block *self, uint16_t x) noexcept nogil:
 	"""Number of 1-bits in this bitmap ``<= x``."""
 	cdef int result = 0, leftover
 	cdef size_t size, n
@@ -959,7 +960,7 @@ cdef int block_select(Block *self, uint16_t i) except -1:
 				self.buf.sparse, 0, BLOCKSIZE - self.cardinality, i)
 
 
-cdef Block *block_copy(Block *dest, Block *src) nogil:
+cdef Block *block_copy(Block *dest, Block *src) noexcept nogil:
 	"""Copy src to dest; dest may be preallocated."""
 	cdef size_t size = getsize(src)
 	convertalloc(dest, src.state, size)
@@ -986,7 +987,7 @@ cdef str block_repr(uint16_t key, Block *self, verbose):
 				% (self.state, key, self.cardinality, self.capacity))
 
 
-cdef inline void block_convert(Block *self) nogil:
+cdef inline void block_convert(Block *self) noexcept nogil:
 	"""Convert between dense, sparse, and inverted sparse as needed."""
 	if self.state == DENSE:
 		if self.cardinality < MAXARRAYLENGTH:
@@ -1008,7 +1009,7 @@ cdef inline void block_convert(Block *self) nogil:
 			abort()
 
 
-cdef inline Buffer block_asdense(Block *self) nogil:
+cdef inline Buffer block_asdense(Block *self) noexcept nogil:
 	# Return dense copy of array in block
 	cdef uint32_t n
 	cdef Buffer buf
@@ -1026,14 +1027,14 @@ cdef inline Buffer block_asdense(Block *self) nogil:
 	return buf
 
 
-cdef inline void block_todense(Block *self) nogil:
+cdef inline void block_todense(Block *self) noexcept nogil:
 	# To dense bitvector; modifies self.
 	cdef Buffer buf = block_asdense(self)
 	self.state = DENSE
 	replacearray(self, buf, BITMAPSIZE // sizeof(uint16_t))
 
 
-cdef inline void block_toposarray(Block *self) nogil:
+cdef inline void block_toposarray(Block *self) noexcept nogil:
 	# To positive sparse array
 	cdef Buffer buf
 	cdef uint32_t length
@@ -1049,7 +1050,7 @@ cdef inline void block_toposarray(Block *self) nogil:
 		abort()
 
 
-cdef inline void block_toinvarray(Block *self) nogil:
+cdef inline void block_toinvarray(Block *self) noexcept nogil:
 	# To inverted sparse array
 	cdef Buffer buf
 	if self.state == DENSE:
@@ -1064,7 +1065,7 @@ cdef inline void block_toinvarray(Block *self) nogil:
 		abort()
 
 
-cdef inline uint16_t *allocsparse(int length) nogil:
+cdef inline uint16_t *allocsparse(int length) noexcept nogil:
 	# Variable length integer vector
 	cdef Buffer buf
 	buf.ptr = aligned_malloc((length or 1) * sizeof(uint16_t), sizeof(void *))
@@ -1073,7 +1074,7 @@ cdef inline uint16_t *allocsparse(int length) nogil:
 	return buf.sparse
 
 
-cdef inline uint64_t *allocdense() nogil:
+cdef inline uint64_t *allocdense() noexcept nogil:
 	# Fixed-size, aligned bitmap.
 	# NB: initialization up to caller.
 	cdef Buffer buf
@@ -1083,13 +1084,14 @@ cdef inline uint64_t *allocdense() nogil:
 	return buf.dense
 
 
-cdef inline void replacearray(Block *self, Buffer buf, size_t cap) nogil:
+cdef inline void replacearray(Block *self, Buffer buf,
+		size_t cap) noexcept nogil:
 	aligned_free(self.buf.ptr)
 	self.buf.ptr = buf.ptr
 	self.capacity = cap
 
 
-cdef inline void extendarray(Block *self, int k) nogil:
+cdef inline void extendarray(Block *self, int k) noexcept nogil:
 	"""Extend array allocation with k elements + amortization."""
 	cdef int desired, newcapacity, size = self.cardinality
 	cdef void *tmp
@@ -1106,7 +1108,7 @@ cdef inline void extendarray(Block *self, int k) nogil:
 	self.capacity = newcapacity
 
 
-cdef inline void trimcapacity(Block *self, int k) nogil:
+cdef inline void trimcapacity(Block *self, int k) noexcept nogil:
 	"""Reduce array capacity to k+4 if currently larger."""
 	cdef void *tmp
 	if k * 2 < self.capacity:
@@ -1117,7 +1119,7 @@ cdef inline void trimcapacity(Block *self, int k) nogil:
 		self.capacity = k + 4
 
 
-cdef void convertalloc(Block *self, int state, int alloc) nogil:
+cdef void convertalloc(Block *self, int state, int alloc) noexcept nogil:
 	"""(Re)allocate array of type `state` and `size` capacity as needed.
 
 	self may be unallocated, but then it must be initialized with zeroes
@@ -1153,7 +1155,7 @@ cdef void convertalloc(Block *self, int state, int alloc) nogil:
 	self.state = state
 
 
-cdef inline void insert(Block *self, int i, uint16_t elem) nogil:
+cdef inline void insert(Block *self, int i, uint16_t elem) noexcept nogil:
 	"""Insert element at index i."""
 	cdef int size = self.cardinality
 	if self.state == INVERTED:
@@ -1166,7 +1168,7 @@ cdef inline void insert(Block *self, int i, uint16_t elem) nogil:
 	self.cardinality += 1 if self.state == POSITIVE else -1
 
 
-cdef inline void remove(Block *self, int i) nogil:
+cdef inline void remove(Block *self, int i) noexcept nogil:
 	"""Remove i'th element from array."""
 	cdef int size = self.cardinality
 	if self.state == INVERTED:
@@ -1176,7 +1178,7 @@ cdef inline void remove(Block *self, int i) nogil:
 	self.cardinality += 1 if self.state == INVERTED else -1
 
 
-cdef inline size_t getsize(Block *self) nogil:
+cdef inline size_t getsize(Block *self) noexcept nogil:
 	"""Return size in uint16_t elements of a block's array/bitmap.
 
 	(excluding unused capacity)."""

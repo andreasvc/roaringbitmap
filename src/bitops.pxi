@@ -78,7 +78,7 @@ cdef inline uint32_t bitsetsubtract(uint64_t *dest,
 
 # Only store result, no cardinality
 cdef inline void bitsetintersectnocard(uint64_t *dest,
-		uint64_t *src1, uint64_t *src2) nogil:
+		uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""dest gets the intersection of src1 and src2."""
 	cdef size_t n
 	cdef uint64_t res1, res2
@@ -90,7 +90,7 @@ cdef inline void bitsetintersectnocard(uint64_t *dest,
 
 
 cdef inline void bitsetunionnocard(uint64_t *dest,
-		uint64_t *src1, uint64_t *src2) nogil:
+		uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""dest gets the union of src1 and src2."""
 	cdef size_t n
 	cdef uint64_t res1, res2
@@ -102,7 +102,7 @@ cdef inline void bitsetunionnocard(uint64_t *dest,
 
 
 cdef inline void bitsetxornocard(uint64_t *dest,
-		uint64_t *src1, uint64_t *src2) nogil:
+		uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""dest gets the xor of src1 and src2."""
 	cdef size_t n
 	cdef uint64_t res1, res2
@@ -114,7 +114,7 @@ cdef inline void bitsetxornocard(uint64_t *dest,
 
 
 cdef inline void bitsetsubtractnocard(uint64_t *dest,
-		uint64_t *src1, uint64_t *src2) nogil:
+		uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""dest gets the src2 - src1."""
 	cdef size_t n
 	cdef uint64_t res1, res2
@@ -127,7 +127,7 @@ cdef inline void bitsetsubtractnocard(uint64_t *dest,
 
 # Count cardinality only
 cdef inline uint32_t bitsetintersectcount(
-		uint64_t *src1, uint64_t *src2) nogil:
+		uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""return the cardinality of the intersection of dest and src.
 
 	:returns: number of set bits in result.
@@ -141,7 +141,7 @@ cdef inline uint32_t bitsetintersectcount(
 
 # Other operations
 cdef inline int iteratesetbits(uint64_t *vec,
-		uint64_t *cur, int *idx) nogil:
+		uint64_t *cur, int *idx) noexcept nogil:
 	"""Iterate over set bits in an array of unsigned long.
 
 	:param cur: pointer to variable to maintain state,
@@ -172,7 +172,7 @@ cdef inline int iteratesetbits(uint64_t *vec,
 
 
 cdef inline int iterateunsetbits(uint64_t *vec,
-		uint64_t *cur, int *idx) nogil:
+		uint64_t *cur, int *idx) noexcept nogil:
 	"""Like ``iteratesetbits``, but return indices of zero bits.
 
 	:param cur: should be initialized as: ``cur = ~vec[idx]``.
@@ -191,7 +191,7 @@ cdef inline int iterateunsetbits(uint64_t *vec,
 
 
 cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur,
-		int *idx) nogil:
+		int *idx) noexcept nogil:
 	"""Iterate in reverse over set bits in an array of unsigned long.
 
 	:param cur: pointer to variable to maintain state,
@@ -222,7 +222,8 @@ cdef inline int reviteratesetbits(uint64_t *vec, uint64_t *cur,
 	return idx[0] * BITSIZE + tmp
 
 
-cdef inline uint32_t extractsetbits(uint16_t *dest, uint64_t *src) nogil:
+cdef inline uint32_t extractsetbits(uint16_t *dest,
+		uint64_t *src) noexcept nogil:
 	"""Store set bits of bitvector in preallocated array.
 
 	:returns: number of elements in result."""
@@ -238,7 +239,8 @@ cdef inline uint32_t extractsetbits(uint16_t *dest, uint64_t *src) nogil:
 	return length
 
 
-cdef inline uint32_t extractunsetbits(uint16_t *dest, uint64_t *src) nogil:
+cdef inline uint32_t extractunsetbits(uint16_t *dest,
+		uint64_t *src) noexcept nogil:
 	"""Store zero bits of bitvector in preallocated array.
 
 	:returns: number of elements in result."""
@@ -255,7 +257,7 @@ cdef inline uint32_t extractunsetbits(uint16_t *dest, uint64_t *src) nogil:
 
 
 cdef inline uint32_t extractintersection(
-		uint16_t *dest, uint64_t *src1, uint64_t *src2) nogil:
+		uint16_t *dest, uint64_t *src1, uint64_t *src2) noexcept nogil:
 	"""Compute intersection of bitvectors and store in preallocated array.
 
 	:returns: number of elements in result."""
@@ -271,7 +273,7 @@ cdef inline uint32_t extractintersection(
 	return length
 
 
-cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2) nogil:
+cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2) noexcept nogil:
 	"""Test whether vec1 is a subset of vec2.
 
 	i.e., all set bits of vec1 should be set in vec2."""
@@ -283,7 +285,7 @@ cdef inline bint bitsubset(uint64_t *vec1, uint64_t *vec2) nogil:
 	return True
 
 
-cdef inline bint bitdisjoint(uint64_t *vec1, uint64_t *vec2) nogil:
+cdef inline bint bitdisjoint(uint64_t *vec1, uint64_t *vec2) noexcept nogil:
 	"""Test whether vec1 is disjoint from vec2.
 
 	i.e., len(vec1 & vec2) = 0."""
@@ -326,7 +328,7 @@ cdef inline int select16(uint16_t w, int i) except -1:
 
 
 cdef inline void setbitcard(uint64_t *bitmap, uint16_t elem,
-		uint32_t *cardinality) nogil:
+		uint32_t *cardinality) noexcept nogil:
 	"""Set bit and update cardinality without branch."""
 	cdef uint32_t i
 	cdef uint64_t ow, nw
@@ -338,7 +340,7 @@ cdef inline void setbitcard(uint64_t *bitmap, uint16_t elem,
 
 
 cdef inline void clearbitcard(uint64_t *bitmap, uint16_t elem,
-		uint32_t *cardinality) nogil:
+		uint32_t *cardinality) noexcept nogil:
 	"""Clear bit and update cardinality without branch."""
 	cdef uint32_t i
 	cdef uint64_t ow, nw
@@ -350,7 +352,7 @@ cdef inline void clearbitcard(uint64_t *bitmap, uint16_t elem,
 
 
 cdef inline void togglebitcard(uint64_t *bitmap, uint16_t elem,
-		uint32_t *cardinality) nogil:
+		uint32_t *cardinality) noexcept nogil:
 	"""Flip bit and update cardinality without branch."""
 	cdef uint32_t i
 	cdef uint64_t ow, nw
