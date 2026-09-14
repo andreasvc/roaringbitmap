@@ -555,7 +555,7 @@ class Test_immutablerb(object):
 		rb = ImmutableRoaringBitmap(data)
 		rb._checkconsistency()
 		assert ref == rb
-		assert type(rb) == ImmutableRoaringBitmap
+		assert type(rb) is ImmutableRoaringBitmap
 
 	def test_initsorted(self, single):
 		for name, data in single:
@@ -603,7 +603,7 @@ class Test_immutablerb(object):
 			rb_unpickled = pickle.loads(rb_pickled)
 			rb._checkconsistency()
 			assert rb_unpickled == rb, name
-			assert type(rb) == ImmutableRoaringBitmap, name
+			assert type(rb) is ImmutableRoaringBitmap, name
 
 	def test_and(self, pair):
 		for name, data1, data2 in pair:
@@ -611,7 +611,7 @@ class Test_immutablerb(object):
 			rb = ImmutableRoaringBitmap(data1)
 			rb2 = ImmutableRoaringBitmap(data2)
 			assert ref & ref2 == set(rb & rb2), name
-			assert type(rb & rb2) == RoaringBitmap, name
+			assert type(rb & rb2) is RoaringBitmap, name
 
 	def test_or(self, pair):
 		for name, data1, data2 in pair:
@@ -793,7 +793,7 @@ class Test_multirb(object):
 				assert rb1 == rb2
 				assert rb1 == rb3
 				rb3._checkconsistency()
-				assert type(rb3) == ImmutableRoaringBitmap
+				assert type(rb3) is ImmutableRoaringBitmap
 
 	def test_multi1(self):
 		for_multi = []

@@ -36,7 +36,7 @@ License, requirements
 The code is licensed under GNU GPL v2, or any later version at your option.
 
 - Python 2.7+/3.3+  http://www.python.org (headers required, e.g. python-dev package)
-- Cython 0.20+      http://www.cython.org
+- Cython 3.0+       http://www.cython.org
 
 Installation, usage
 -------------------
@@ -47,7 +47,13 @@ Installation, usage
     $ cd roaringbitmap
     $ make
 
-(or ``make py2`` for Python 2)
+For Python 2, build with a Cython version that supports Python 2.7::
+
+    $ python2 -m pip install 'Cython>=3,<3.1'
+    $ make py2
+
+The C sources published on PyPI are generated with the current Cython release
+and support Python 3 only.
 
 A ``RoaringBitmap()`` can be used as a replacement for a normal (mutable)
 Python set containing (unsigned) 32-bit integers:

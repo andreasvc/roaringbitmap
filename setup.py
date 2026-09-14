@@ -1,8 +1,7 @@
 """Generic setup.py for Cython code."""
 import os
 import sys
-from distutils.core import setup
-from distutils.extension import Extension
+from setuptools import Extension, setup
 
 PY2 = sys.version_info[0] == 2
 
@@ -33,18 +32,18 @@ with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.7.2',
+		version='0.7.3',
 		description='Roaring Bitmap',
 		long_description=README,
+		long_description_content_type='text/x-rst',
 		author='Andreas van Cranenburgh',
 		author_email='A.W.van.Cranenburgh@rug.nl',
 		url='http://roaringbitmap.readthedocs.io',
-		license='GPL',
+		license='GPL-2.0-or-later',
 		platforms=['Many'],
 		classifiers=[
 				'Development Status :: 4 - Beta',
 				'Intended Audience :: Science/Research',
-				'License :: OSI Approved :: GNU General Public License (GPL)',
 				'Operating System :: POSIX',
 				'Programming Language :: Python :: 2.7',
 				'Programming Language :: Python :: 3.3',

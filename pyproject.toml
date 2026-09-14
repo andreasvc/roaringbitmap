@@ -1,0 +1,14 @@
+[build-system]
+requires = [
+    "setuptools<45; python_version < '3'",
+    "setuptools>=61; python_version >= '3'",
+    "Cython>=3,<3.1; python_version < '3'",
+    "Cython>=3; python_version >= '3'",
+]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = [
+    "pytest>=3.0.0",
+    "pycodestyle",
+]

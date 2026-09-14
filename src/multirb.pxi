@@ -184,7 +184,7 @@ cdef class MultiRoaringBitmap(object):
 		IndexError for invalid index."""
 		if isinstance(i, slice):
 			return [self[n] for n in range(*i.indices(self.size))]
-		elif not isinstance(i, (int, long)):
+		elif not isinstance(i, INTEGER_TYPES):
 			raise TypeError('Expected integer index or slice object.')
 		elif i < 0:
 			i += self.size

@@ -61,9 +61,28 @@ cdef extern from *:
 	cdef bint PY2
 
 
-cdef extern from "Python.h":
-	int PyObject_CheckReadBuffer(object)
-	int PyObject_AsReadBuffer(object, const void **, Py_ssize_t *)
+cdef extern from *:
+	"""
+	#if PY_MAJOR_VERSION < 3
+	#define roaring_PyObject_CheckReadBuffer PyObject_CheckReadBuffer
+	#define roaring_PyObject_AsReadBuffer PyObject_AsReadBuffer
+	#else
+	static int roaring_PyObject_CheckReadBuffer(PyObject *obj) {
+		(void)obj;
+		return 0;
+	}
+
+	static int roaring_PyObject_AsReadBuffer(
+			PyObject *obj, const void **buffer, Py_ssize_t *buffer_len) {
+		(void)obj;
+		(void)buffer;
+		(void)buffer_len;
+		return -1;
+	}
+	#endif
+	"""
+	int roaring_PyObject_CheckReadBuffer(object)
+	int roaring_PyObject_AsReadBuffer(object, const void **, Py_ssize_t *)
 
 
 cdef extern from "macros.h":
@@ -143,6 +162,7 @@ chararray = array.array(b'B' if PY2 else 'B')
 dblarray = array.array(b'd' if PY2 else 'd')
 longarray = array.array(b'L' if PY2 else 'L')
 RANGE = xrange if PY2 else range
+INTEGER_TYPES = (int, type(2 ** 100))
 EMPTYIRB = ImmutableRoaringBitmap()
 
 
@@ -829,7 +849,7 @@ cdef class RoaringBitmap(object):
 				start, stop, step = i.indices(len(self))
 				return RoaringBitmap(
 						[self[x] for x in RANGE(start, stop, step)])
-		elif isinstance(i, (int, long)):
+		elif isinstance(i, INTEGER_TYPES):
 			return self.select(self._ridx(i))
 		else:
 			raise TypeError('Expected integer index or slice object.')
@@ -845,7 +865,7 @@ cdef class RoaringBitmap(object):
 				start, stop, step = i.indices(len(self))
 				self.difference_update(RoaringBitmap([
 						self[x] for x in RANGE(start, stop, step)]))
-		elif isinstance(i, (int, long)):
+		elif isinstance(i, INTEGER_TYPES):
 			self.discard(self.select(self._ridx(i)))
 		else:
 			raise TypeError('Expected integer index or slice object.')
@@ -1164,8 +1184,8 @@ cdef inline int getbufptr(
 		# Although the new-style buffer interface was backported to Python 2.6,
 		# some modules, notably mmap, only support the old buffer interface.
 		# Cf. http://bugs.python.org/issue9229
-		if PyObject_CheckReadBuffer(obj) == 1:
-			result = PyObject_AsReadBuffer(
+		if roaring_PyObject_CheckReadBuffer(obj) == 1:
+			result = roaring_PyObject_AsReadBuffer(
 					obj, <const void **>ptr, size)
 	elif PyObject_CheckBuffer(obj) == 1:  # new-style Buffer interface
 		result = PyObject_GetBuffer(obj, buf, PyBUF_SIMPLE)
