@@ -1,6 +1,6 @@
 """Benchmarks for roaringbitmap"""
 from __future__ import division, print_function, absolute_import, \
-		unicode_literals
+		unicode_literals  # noqa
 import random
 import timeit
 
@@ -87,7 +87,7 @@ def bench_eq_equal():
 	return a, b
 
 
-def bench_neq_cardinality():
+def bench_neq_card():
 	a = timeit.Timer('ref != ref2',
 			setup='from __main__ import COMPARE_EQUAL, COMPARE_CARDINALITY; '
 				'ref = set(COMPARE_EQUAL); '
@@ -299,7 +299,7 @@ def main():
 				bench_and, bench_or, bench_xor, bench_sub,
 				bench_iand, bench_ior, bench_ixor, bench_isub,
 				bench_eq_identity, bench_eq_equal,
-				bench_neq_cardinality, bench_neq_early, bench_neq_late,
+				bench_neq_card, bench_neq_early, bench_neq_late,
 				# bench_andlen, bench_orlen,
 				bench_jaccard):
 			a, b = func()

@@ -56,6 +56,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		self._hash = -1
 		self.size = (<uint32_t *>ptr)[0]
 		self.capacity = self.size
+		self.cardinality_valid = False
 		self.keys = <uint16_t *>&(ptr[sizeof(uint32_t)])
 		# pointers will be adjusted on the fly with self.offset
 		self.data = <Block *>&(ptr[
@@ -167,7 +168,8 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 
 cdef inline bint irb_equal(ImmutableRoaringBitmap iob1,
 		ImmutableRoaringBitmap iob2):
-	if (iob1.bufsize != iob2.bufsize
+	if (not rb_cardinality_equal(iob1, iob2)
+			or iob1.bufsize != iob2.bufsize
 			or iob1._gethash() != iob2._gethash()):
 		return False
 	return memcmp(iob1.ptr, iob2.ptr, iob1.bufsize) == 0

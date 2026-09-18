@@ -30,8 +30,19 @@ cdef inline richcmp(x, y, int op):
 	return NotImplemented
 
 
+cdef inline bint rb_cardinality_equal(
+		RoaringBitmap ob1, RoaringBitmap ob2):
+	if not ob1.cardinality_valid:
+		ob1._getcardinality()
+	if not ob2.cardinality_valid:
+		ob2._getcardinality()
+	return ob1.cardinality == ob2.cardinality
+
+
 cdef inline bint rb_equal(RoaringBitmap ob1, RoaringBitmap ob2):
 	cdef size_t n
+	if not rb_cardinality_equal(ob1, ob2):
+		return False
 	if ob1.size != ob2.size:
 		return False
 	if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:

@@ -223,10 +223,14 @@ cdef class RoaringBitmap(object):
 	cdef uint32_t size  # the number of blocks
 	cdef uint32_t capacity  # the allocated capacity for blocks
 	cdef size_t offset  # used for immutable bitmaps with relative pointers
+	cdef uint64_t cardinality  # cached total number of elements
+	cdef bint cardinality_valid
 
 	def __cinit__(self, *args, **kwargs):
 		self.keys = self.data = NULL
 		self.capacity = self.size = self.offset = 0
+		self.cardinality = 0
+		self.cardinality_valid = True
 
 	def __init__(self, iterable=None):
 		"""Return a new RoaringBitmap with elements from ``iterable``.
@@ -374,6 +378,7 @@ cdef class RoaringBitmap(object):
 			block.cardinality = 0
 			block.buf.sparse = allocsparse(INITCAPACITY)
 			block.capacity = INITCAPACITY
+		self.cardinality_valid = False
 		block_add(block, lowbits(elem))
 		block_convert(block)
 
@@ -388,6 +393,7 @@ cdef class RoaringBitmap(object):
 		If the element is not a member, do nothing."""
 		cdef int i = self._getindex(highbits(elem))
 		if i >= 0:
+			self.cardinality_valid = False
 			block_discard(&(self.data[i]), lowbits(elem))
 			if self.data[i].cardinality == 0:
 				self._removeatidx(i)
@@ -403,6 +409,7 @@ cdef class RoaringBitmap(object):
 			block_discard(&(self.data[i]), lowbits(elem))
 			if x == self.data[i].cardinality:
 				raise KeyError(elem)
+			self.cardinality_valid = False
 			if self.data[i].cardinality == 0:
 				self._removeatidx(i)
 		else:
@@ -413,6 +420,7 @@ cdef class RoaringBitmap(object):
 		cdef uint32_t high, low
 		if self.size == 0:
 			raise ValueError('pop from empty roaringbitmap')
+		self.cardinality_valid = False
 		high = self.keys[self.size - 1]
 		low = block_pop(&(self.data[self.size - 1]))
 		if self.data[self.size - 1].cardinality == 0:
@@ -432,6 +440,8 @@ cdef class RoaringBitmap(object):
 		if self.keys is NULL or self.data is NULL:
 			raise MemoryError(INITCAPACITY)
 		self.capacity = INITCAPACITY
+		self.cardinality = 0
+		self.cardinality_valid = True
 
 	def __lshift__(self, other):
 		return self.__rshift__(-other)
@@ -526,10 +536,17 @@ cdef class RoaringBitmap(object):
 					yield high | low
 
 	def __len__(self):
-		cdef size_t result = 0, n
-		for n in range(self.size):
-			result += self.data[n].cardinality
-		return result
+		return self._getcardinality()
+
+	cdef inline uint64_t _getcardinality(self) noexcept nogil:
+		cdef uint64_t result = 0
+		cdef size_t n
+		if not self.cardinality_valid:
+			for n in range(self.size):
+				result += self.data[n].cardinality
+			self.cardinality = result
+			self.cardinality_valid = True
+		return self.cardinality
 
 	def __sizeof__(self):
 		"""Return memory usage in bytes (incl. overallocation)."""
@@ -639,6 +656,7 @@ cdef class RoaringBitmap(object):
 				self.data[n].buf.sparse = allocsparse(data[n].capacity)
 				size = data[n].capacity * sizeof(uint16_t)
 			memcpy(self.data[n].buf.ptr, &(buf[offset]), size)
+		self.cardinality_valid = False
 
 	def intersection(self, *other):
 		"""Return the intersection of two or more sets as a new RoaringBitmap.
@@ -1070,29 +1088,9 @@ cdef class RoaringBitmap(object):
 					SETBIT(block.buf.dense, elem)
 			block_convert(block)
 
-	# def _inititerator(self, iterable):
-	# 	cdef Block *block = NULL
-	# 	cdef uint32_t elem
-	# 	cdef uint16_t key
-	# 	cdef int i, prev = -1
-	# 	for elem in iterable:
-	# 		key = highbits(elem)
-	# 		if key != prev:
-	# 			i = self._getindex(key)
-	# 			if i >= 0:
-	# 				block = &(self.data[i])
-	# 			else:
-	# 				block = self._insertempty(-i - 1, key)
-	# 				block.state = POSITIVE
-	# 				block.cardinality = 0
-	# 				block.buf.sparse = allocsparse(INITCAPACITY)
-	# 				block.capacity = INITCAPACITY
-	# 			prev = key
-	# 		block_add(block, lowbits(elem))
-	# 		block_convert(block)
-
 	cdef _initarray(self, int k):
 		"""Allocate k elements and initialize pointers to zero."""
+		self.cardinality_valid = False
 		self._extendarray(k)
 		memset(self.data, 0, self.capacity * sizeof(Block))
 
@@ -1115,6 +1113,7 @@ cdef class RoaringBitmap(object):
 
 	cdef _resize(self, int k):
 		"""Set size and if necessary reduce array allocation to k elements."""
+		self.cardinality_valid = False
 		cdef void *tmp1
 		cdef void *tmp2
 		if k > INITCAPACITY and k * 2 < <int>self.capacity:
@@ -1134,6 +1133,7 @@ cdef class RoaringBitmap(object):
 			raise MemoryError(size)
 
 	cdef _replacearrays(self, uint16_t *keys, Block *data, int size):
+		self.cardinality_valid = False
 		free(self.keys)
 		free(self.data)
 		self.keys = keys
@@ -1143,6 +1143,7 @@ cdef class RoaringBitmap(object):
 
 	cdef _removeatidx(self, int i):
 		"""Remove the i'th element."""
+		self.cardinality_valid = False
 		aligned_free(self.data[i].buf.ptr)
 		memmove(&(self.keys[i]), &(self.keys[i + 1]),
 				(self.size - i - 1) * sizeof(uint16_t))
@@ -1152,6 +1153,7 @@ cdef class RoaringBitmap(object):
 
 	cdef Block *_insertempty(self, int i, uint16_t key):
 		"""Insert a new, uninitialized block."""
+		self.cardinality_valid = False
 		self._extendarray(1)
 		if i < <int>self.size:
 			memmove(&(self.keys[i + 1]), &(self.keys[i]),
@@ -1165,6 +1167,7 @@ cdef class RoaringBitmap(object):
 
 	cdef _insertcopy(self, int i, uint16_t key, Block *block):
 		"""Insert a copy of given block."""
+		self.cardinality_valid = False
 		cdef size_t size
 		self._extendarray(1)
 		if i < <int>self.size:
@@ -1215,7 +1218,9 @@ cdef class RoaringBitmap(object):
 		cdef Block b1
 		cdef Block *b2
 		cdef size_t n, m
+		cdef uint64_t cardinality = 0
 		for n in range(self.size):
+			cardinality += self.data[n].cardinality
 			assert self.data[n].state in (DENSE, POSITIVE, INVERTED)
 			assert 1 <= self.data[n].cardinality < 1 << 16
 			assert getsize(&(self.data[n])) <= self.data[n].capacity
@@ -1235,6 +1240,8 @@ cdef class RoaringBitmap(object):
 					b2 = self._getblk(n, &b1)
 					assert b2.buf.sparse[m] < b2.buf.sparse[m + 1], (
 							m, b2.buf.sparse[m], b2.buf.sparse[m + 1])
+		if self.cardinality_valid:
+			assert self.cardinality == cardinality
 
 	cdef inline Block *_getblk(self, int i, Block *tmp) noexcept nogil:
 		"""Get pointer to block `i`. If there is an offset, copy this block

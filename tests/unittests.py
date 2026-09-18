@@ -1,5 +1,5 @@
 """Unit tests for roaringbitmap"""
-from __future__ import division, absolute_import, unicode_literals
+from __future__ import division, absolute_import, unicode_literals  # noqa
 import sys
 import array
 import pytest
@@ -374,6 +374,41 @@ class Test_roaringbitmap(object):
 		rb.intersection_update(*[RoaringBitmap(a) for a in multi[1:]])
 		rb._checkconsistency()
 		assert rb == ref
+
+	def test_cachedcardinality(self):
+		data = {1, 2, 3, (1 << 16) + 4, (2 << 16) + 5}
+		rb = RoaringBitmap(data)
+		assert len(rb) == len(data)
+
+		rb.add(6)
+		data.add(6)
+		assert len(rb) == len(data)
+		rb.add(6)
+		assert len(rb) == len(data)
+		rb.discard(2)
+		data.discard(2)
+		assert len(rb) == len(data)
+		rb.discard(999)
+		assert len(rb) == len(data)
+		rb.remove(3)
+		data.remove(3)
+		assert len(rb) == len(data)
+
+		for operation, other in [
+				('intersection_update', {1, 6, 7}),
+				('update', {7, 8, 1 << 20}),
+				('difference_update', {1, 8}),
+				('symmetric_difference_update', {6, 9})]:
+			getattr(rb, operation)(other)
+			getattr(data, operation)(other)
+			assert len(rb) == len(data)
+			assert rb == data
+
+		rb.pop()
+		data.remove(max(data))
+		assert len(rb) == len(data)
+		rb.clear()
+		assert len(rb) == 0
 
 	def test_aggregateor(self, multi):
 		ref = set(multi[0])
