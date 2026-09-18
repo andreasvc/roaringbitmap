@@ -61,7 +61,7 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 		self.data = <Block *>&(ptr[
 				sizeof(uint32_t) + self.size * (sizeof(uint16_t))])
 
-	def __hash__(self):
+	cdef inline long _gethash(self) noexcept:
 		cdef size_t n
 		if self._hash == -1:
 			self._hash = 5381
@@ -70,18 +70,24 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 				# i.e., self._hash *= 33 ^ self.ptr[n]
 		return self._hash
 
+	def __hash__(self):
+		return self._gethash()
+
 	def __richcmp__(x, y, int op):
 		cdef ImmutableRoaringBitmap iob1, iob2
 		if (isinstance(x, ImmutableRoaringBitmap)
 				and isinstance(y, ImmutableRoaringBitmap)):
 			if op == 2:  # ==
+				if x is y:
+					return True
 				iob1, iob2 = x, y
-				if (iob1.bufsize != iob2.bufsize
-						or iob1.__hash__() != iob2.__hash__()):
-					return False
-				return memcmp(iob1.ptr, iob2.ptr, iob1.bufsize) == 0
+				return irb_equal(iob1, iob2)
 			elif op == 3:  # !=
-				return not (x == y)
+				# copy of op == 2 code, with return value inverted
+				if x is y:
+					return False
+				iob1, iob2 = x, y
+				return not irb_equal(iob1, iob2)
 		return richcmp(x, y, op)
 
 	def __sizeof__(self):
@@ -157,3 +163,11 @@ cdef class ImmutableRoaringBitmap(RoaringBitmap):
 	def clear(self):
 		"""Unsupported method."""
 		raise ValueError('ImmutableRoaringBitmap cannot be modified.')
+
+
+cdef inline bint irb_equal(ImmutableRoaringBitmap iob1,
+		ImmutableRoaringBitmap iob2):
+	if (iob1.bufsize != iob2.bufsize
+			or iob1._gethash() != iob2._gethash()):
+		return False
+	return memcmp(iob1.ptr, iob2.ptr, iob1.bufsize) == 0

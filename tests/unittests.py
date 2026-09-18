@@ -117,6 +117,15 @@ class Test_roaringbitmap(object):
 			rb = RoaringBitmap(data)
 			rb._checkconsistency()
 			assert ref == rb, name
+		data = [1 << 31, 2 << 16, 3, 2 << 16, 0, (1 << 32) - 1]
+		for sequence in (data, tuple(reversed(data))):
+			rb = RoaringBitmap(sequence)
+			rb._checkconsistency()
+			assert rb == set(data)
+		for collection in (set(data), dict.fromkeys(data)):
+			rb = RoaringBitmap(collection)
+			rb._checkconsistency()
+			assert rb == set(data)
 
 	def test_inititerator(self, single):
 		for name, data in single:
@@ -147,6 +156,17 @@ class Test_roaringbitmap(object):
 		rb = RoaringBitmap(range(23, n, step))
 		rb._checkconsistency()
 		assert ref == rb, ('range(23, %d, %d)' % (n, step))
+
+	def test_initreversedrange(self):
+		for start, stop, step in [
+				(400, 22, -1),
+				(70000, 20, -7),
+				((1 << 32) - 1, (1 << 32) - 10000, -113),
+				(10, -1, -1)]:
+			ref = set(range(start, stop, step))
+			rb = RoaringBitmap(range(start, stop, step))
+			rb._checkconsistency()
+			assert ref == rb, 'range({}, {}, {})'.format(start, stop, step)
 
 	def test_inititerableallset(self):
 		rb = RoaringBitmap(list(range(0, 0xffff + 1)))

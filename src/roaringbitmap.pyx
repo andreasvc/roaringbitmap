@@ -161,6 +161,46 @@ DEF DENSE = 0
 DEF POSITIVE = 1
 DEF INVERTED = 2
 
+
+cdef void sort_uint32(uint32_t *values, uint32_t *tmp,
+		size_t length) noexcept nogil:
+	"""Stable radix sort for fixed-width unsigned integers."""
+	cdef size_t counts[256]
+	cdef size_t offsets[256]
+	cdef size_t n, total
+	cdef int bucket, shift
+	cdef uint32_t *source = values
+	cdef uint32_t *dest = tmp
+	cdef uint32_t *swap
+	for shift in range(0, 32, 8):
+		memset(counts, 0, sizeof(counts))
+		for n in range(length):
+			counts[(source[n] >> shift) & 0xff] += 1
+		total = 0
+		for bucket in range(256):
+			offsets[bucket] = total
+			total += counts[bucket]
+		for n in range(length):
+			bucket = (source[n] >> shift) & 0xff
+			dest[offsets[bucket]] = source[n]
+			offsets[bucket] += 1
+		swap = source
+		source = dest
+		dest = swap
+
+
+cdef void sort_small_uint32(uint32_t *values, size_t length) noexcept nogil:
+	"""Insertion sort avoids the radix sort's fixed cost for short inputs."""
+	cdef size_t i, j
+	cdef uint32_t value
+	for i in range(1, length):
+		value = values[i]
+		j = i
+		while j != 0 and values[j - 1] > value:
+			values[j] = values[j - 1]
+			j -= 1
+		values[j] = value
+
 include "bitops.pxi"
 include "arrayops.pxi"
 include "block.pxi"
@@ -199,17 +239,30 @@ cdef class RoaringBitmap(object):
 		consumed incrementally.
 		``iterable`` may be a ``range`` (Python 3) or ``xrange`` (Python 2)
 		object, which will be constructed efficiently."""
-		cdef size_t n
+		cdef size_t n, length
+		cdef uint32_t first, second, last
+		cdef uint64_t step
 		cdef Block b1
 		cdef RoaringBitmap ob
 		if isinstance(iterable, RANGE):
-			_, (start, stop, step) = iterable.__reduce__()
-			if 0 <= start < stop and step >= 1:
-				self._initrange(start, stop, step)
+			length = len(iterable)
+			if length == 0:
 				return
-			# fall through on non-trivial use of range()
-		if isinstance(iterable, (list, tuple, set, dict, RANGE)):
-			self._init2pass(iterable)
+			first = iterable[0]
+			if length == 1:
+				self.add(first)
+				return
+			second = iterable[1]
+			last = iterable[length - 1]
+			if first < second:
+				step = <uint64_t>second - first
+				self._initrange(first, <uint64_t>last + 1, step)
+			else:
+				step = <uint64_t>first - second
+				self._initrange(last, <uint64_t>first + 1, step)
+			return
+		if isinstance(iterable, (list, tuple, set, dict)):
+			self._initknownsize(iterable)
 		elif isinstance(iterable, RoaringBitmap):
 			ob = iterable
 			self._extendarray(ob.size)
@@ -880,11 +933,10 @@ cdef class RoaringBitmap(object):
 		else:
 			raise TypeError('Expected integer index or slice object.')
 
-	def _initrange(self, uint32_t start, uint32_t stop, uint32_t step):
+	def _initrange(self, uint32_t start, uint64_t stop, uint64_t step):
 		cdef Block *block = NULL
 		cdef uint32_t key, blockstart, blockstop, gap
-		cdef uint32_t tmp = start
-		cdef uint64_t n
+		cdef uint64_t tmp = start, n
 		if step >= (1 << 16):
 			n = start
 			while n < stop:
@@ -902,47 +954,88 @@ cdef class RoaringBitmap(object):
 			if tmp >= stop:
 				break
 
-	def _init2pass(self, iterable):
-		cdef Block *block = NULL
+	cdef _initknownsize(self, iterable):
+		"""Initialize from a known-size built-in through a sortable C array."""
+		cdef size_t n, length = len(iterable)
+		cdef uint32_t *values = NULL
+		cdef uint32_t *tmp = NULL
 		cdef uint32_t elem
-		cdef uint16_t key
-		cdef int i, prev = -1
-		# gather keys and count elements for each block
-		for elem in iterable:
-			key = highbits(elem)
-			if key != prev:
-				i = self._getindex(key)
-				if i < 0:
-					block = self._insertempty(-i - 1, key)
-					block.cardinality = block.capacity = 0
+		cdef bint sorted_input = True
+		if length == 0:
+			return
+		values = <uint32_t *>malloc(length * sizeof(uint32_t))
+		if values is NULL:
+			raise MemoryError(length)
+		try:
+			if isinstance(iterable, (list, tuple)):
+				for n in range(length):
+					values[n] = iterable[n]
+					if n != 0 and values[n] < values[n - 1]:
+						sorted_input = False
+			else:
+				n = 0
+				for elem in iterable:
+					values[n] = elem
+					if n != 0 and values[n] < values[n - 1]:
+						sorted_input = False
+					n += 1
+			if not sorted_input:
+				if length < 128:
+					with nogil:
+						sort_small_uint32(values, length)
 				else:
-					block = &(self.data[i])
-				prev = key
-			block.capacity += 1  # NB: wraps to 0 for block with all elements set
-		# allocate blocks
-		for i in range(<int>self.size):
-			block = &(self.data[i])
-			if 0 < block.capacity < MAXARRAYLENGTH:
-				block.buf.sparse = allocsparse(block.capacity)
+					tmp = <uint32_t *>malloc(length * sizeof(uint32_t))
+					if tmp is NULL:
+						raise MemoryError(length)
+					with nogil:
+						sort_uint32(values, tmp, length)
+			self._initsortedarray(values, length)
+		finally:
+			free(tmp)
+			free(values)
+
+	cdef _initsortedarray(self, uint32_t *values, size_t length):
+		"""Initialize directly from a sorted C array, removing duplicates."""
+		cdef Block *block
+		cdef size_t start = 0, stop, n
+		cdef uint32_t cardinality
+		cdef uint16_t key, elem, previous
+		while start < length:
+			key = highbits(values[start])
+			stop = start + 1
+			while stop < length and highbits(values[stop]) == key:
+				stop += 1
+
+			cardinality = 1
+			previous = lowbits(values[start])
+			for n in range(start + 1, stop):
+				elem = lowbits(values[n])
+				if elem != previous:
+					cardinality += 1
+					previous = elem
+
+			block = self._insertempty(self.size, key)
+			block.cardinality = cardinality
+			if cardinality < MAXARRAYLENGTH:
+				block.capacity = cardinality
+				block.buf.sparse = allocsparse(cardinality)
 				block.state = POSITIVE
-			else:  # if necessary, will convert to inverted later
+				block.buf.sparse[0] = lowbits(values[start])
+				cardinality = 1
+				for n in range(start + 1, stop):
+					elem = lowbits(values[n])
+					if elem != block.buf.sparse[cardinality - 1]:
+						block.buf.sparse[cardinality] = elem
+						cardinality += 1
+			else:
 				block.capacity = BITMAPSIZE // sizeof(uint16_t)
 				block.buf.dense = allocdense()
-				memset(block.buf.dense, 0, BITMAPSIZE)
 				block.state = DENSE
-		# second pass, add elements for each block
-		prev = -1
-		for elem in iterable:
-			key = highbits(elem)
-			if key != prev:
-				i = self._getindex(key)
-				if prev != -1:
-					block_convert(block)
-				block = &(self.data[i])
-				prev = key
-			block_add(block, lowbits(elem))
-		if prev != -1:
-			block_convert(block)
+				memset(block.buf.dense, 0, BITMAPSIZE)
+				for n in range(start, stop):
+					SETBIT(block.buf.dense, lowbits(values[n]))
+				block_convert(block)
+			start = stop
 
 	def _inititerator(self, iterable):
 		cdef Block *block = NULL

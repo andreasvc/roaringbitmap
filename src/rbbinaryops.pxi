@@ -2,7 +2,6 @@ cdef inline richcmp(x, y, int op):
 	"""Considers comparisons to RoaringBitmaps and sets;
 	other types raise a TypeError."""
 	cdef RoaringBitmap ob1, ob2
-	cdef size_t n
 	if x is None or y is None:
 		if op == 2 or op == 3:
 			return op == 3
@@ -11,23 +10,15 @@ cdef inline richcmp(x, y, int op):
 			or not isinstance(y, (RoaringBitmap, set))):
 		raise TypeError
 	if op == 2:  # ==
+		if x is y:
+			return True
 		ob1, ob2 = ensurerb(x), ensurerb(y)
-		if ob1.size != ob2.size:
-			return False
-		if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
-			return False
-		for n in range(ob1.size):
-			if ob1.data[n].cardinality != ob2.data[n].cardinality:
-				return False
-		for n in range(ob1.size):
-			if memcmp(
-					<void *>(ob1.offset + ob1.data[n].buf.offset),
-					<void *>(ob2.offset + ob2.data[n].buf.offset),
-					getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
-				return False
-		return True
+		return rb_equal(ob1, ob2)
 	elif op == 3:  # !=
-		return not richcmp(x, y, 2)
+		if x is y:
+			return False
+		ob1, ob2 = ensurerb(x), ensurerb(y)
+		return not rb_equal(ob1, ob2)
 	elif op == 1:  # <=
 		return ensurerb(x).issubset(y)
 	elif op == 5:  # >=
@@ -37,6 +28,24 @@ cdef inline richcmp(x, y, int op):
 	elif op == 4:  # >
 		return len(x) > len(y) and ensurerb(x).issuperset(y)
 	return NotImplemented
+
+
+cdef inline bint rb_equal(RoaringBitmap ob1, RoaringBitmap ob2):
+	cdef size_t n
+	if ob1.size != ob2.size:
+		return False
+	if memcmp(ob1.keys, ob2.keys, ob1.size * sizeof(uint16_t)) != 0:
+		return False
+	for n in range(ob1.size):
+		if ob1.data[n].cardinality != ob2.data[n].cardinality:
+			return False
+	for n in range(ob1.size):
+		if memcmp(
+				<void *>(ob1.offset + ob1.data[n].buf.offset),
+				<void *>(ob2.offset + ob2.data[n].buf.offset),
+				getsize(&(ob1.data[n])) * sizeof(uint16_t)) != 0:
+			return False
+	return True
 
 
 cdef inline RoaringBitmap rb_iand(RoaringBitmap ob1, RoaringBitmap ob2):
