@@ -94,11 +94,17 @@ cdef class MultiRoaringBitmap(object):
 		if op == 2:  # ==
 			if len(x) != len(y):
 				return False
-			return all(a == b for a, b in zip(x, y))
+			for a, b in zip(x, y):
+				if a != b:
+					return False
+			return True
 		elif op == 3:  # !=
 			if len(x) != len(y):
 				return True
-			return not all(a == b for a, b in zip(x, y))
+			for a, b in zip(x, y):
+				if a != b:
+					return True
+			return False
 		return NotImplemented
 
 	def close(self):

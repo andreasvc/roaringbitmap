@@ -1,0 +1,96 @@
+name: Build and publish distributions
+
+on:
+  pull_request:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-wheels:
+    name: ${{ matrix.os }} / ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+          - os: ubuntu-24.04-arm
+            arch: aarch64
+          - os: macos-15-intel
+            arch: x86_64
+          - os: macos-latest
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==4.2.0
+
+      - name: Build and test wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: distributions-${{ matrix.os }}-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  build-sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+
+      - name: Build source distribution
+        run: |
+          python -m pip install build==1.6.1
+          python -m build --sdist --outdir dist
+
+      - name: Verify tag matches package version
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        run: test -f "dist/roaringbitmap-${GITHUB_REF_NAME#v}.tar.gz"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: distributions-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish release to PyPI
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/roaringbitmap
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: distributions-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: pypa/gh-action-pypi-publish@release/v1

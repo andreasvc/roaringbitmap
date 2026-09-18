@@ -38,9 +38,18 @@ The code is licensed under GNU GPL v2, or any later version at your option.
 - Python 2.7+/3.3+  http://www.python.org (headers required, e.g. python-dev package)
 - Cython 3.0+       http://www.cython.org
 
-Installation, usage
--------------------
+Installation
+------------
 
+::
+    $ pip install roaringbitmap
+
+For Linux and Mac, there are binary wheels. Binary wheels for x86-64 require
+the POPCNT CPU instruction and raise ``ImportError`` on unsupported CPUs.
+Builds from source use ``-march=native`` by default and are optimized for the
+build machine.
+
+To compile from source:
 ::
 
     $ git clone https://github.com/andreasvc/roaringbitmap.git
@@ -54,6 +63,10 @@ For Python 2, build with a Cython version that supports Python 2.7::
 
 The C sources published on PyPI are generated with the current Cython release
 and support Python 3 only.
+
+
+Usage
+-----
 
 A ``RoaringBitmap()`` can be used as a replacement for a normal (mutable)
 Python set containing (unsigned) 32-bit integers:
@@ -88,53 +101,53 @@ Output of ``$ make bench``::
     small sparse set
     100 runs with sets of 200 random elements n s.t. 0 <= n < 40000
                     set()  RoaringBitmap()    ratio
-    init         0.000834          0.00138    0.603
-    initsort      0.00085         0.000394     2.16
-    and           0.00102         8.49e-05     12.1
-    or            0.00171         0.000169     10.1
-    xor           0.00152         0.000213     7.11
-    sub          0.000934         0.000197     4.74
-    iand         1.29e-05         2.97e-06     4.35
-    ior           9.7e-06         3.26e-06     2.98
-    ixor         8.98e-06         3.43e-06     2.62
-    isub         6.83e-06          3.3e-06     2.07
-    eq           0.000438         1.17e-05     37.6
-    neq          6.37e-06         7.81e-06    0.816
-    jaccard        0.0029         0.000126     23.1
+    init         0.000373          0.00067    0.557
+    initsort     0.000375          0.00038    0.986
+    and          0.000492         6.95e-05     7.07
+    or           0.000547         8.87e-05     6.16
+    xor           0.00049          8.8e-05     5.57
+    sub          0.000349         8.35e-05     4.18
+    iand         1.23e-05         3.56e-06     3.47
+    ior          9.13e-06         3.14e-06     2.91
+    ixor         8.29e-06         3.59e-06     2.31
+    isub         7.33e-06         3.13e-06     2.34
+    eq           0.000171         6.94e-06     24.6
+    neq          4.64e-06         2.15e-05    0.216
+    jaccard       0.00103         4.95e-05     20.7
 
     medium load factor
     100 runs with sets of 59392 random elements n s.t. 0 <= n < 118784
                     set()  RoaringBitmap()    ratio
-    init            0.564            0.324     1.74
-    initsort        0.696            0.273     2.55
-    and             0.613         0.000418     1466
-    or              0.976         0.000292     3344
-    xor             0.955         0.000294     3250
-    sub             0.346         0.000316     1092
-    iand          0.00658         1.14e-05      575
-    ior           0.00594         1.08e-05      548
-    ixor          0.00434         1.12e-05      385
-    isub          0.00431         1.09e-05      397
-    eq             0.0991         0.000116      851
-    neq          9.62e-06         1.29e-05    0.743
-    jaccard          1.62          0.00025     6476
+    init             0.41            0.314      1.3
+    initsort        0.383            0.173     2.22
+    and             0.405         0.000268     1508
+    or              0.643         0.000373     1720
+    xor             0.495         0.000215     2303
+    sub             0.245         0.000204     1202
+    iand          0.00408         7.08e-06      576
+    ior           0.00561         6.05e-06      926
+    ixor          0.00249         6.46e-06      385
+    isub          0.00234         6.94e-06      337
+    eq               0.14         5.39e-05     2600
+    neq          6.79e-06         8.98e-06    0.755
+    jaccard         0.878         0.000177     4962
 
     dense set / high load factor
     100 runs with sets of 39800 random elements n s.t. 0 <= n < 40000
                     set()  RoaringBitmap()    ratio
-    init             0.33           0.0775     4.26
-    initsort        0.352            0.148     2.38
-    and              0.24         0.000223     1078
-    or               0.45         0.000165     2734
-    xor             0.404         0.000161     2514
-    sub             0.169         0.000173      973
-    iand          0.00287         6.02e-06      477
-    ior           0.00179         6.34e-06      282
-    ixor          0.00195         5.53e-06      353
-    isub           0.0017         6.35e-06      267
-    eq             0.0486         4.65e-05     1045
-    neq          1.01e-05         1.13e-05    0.888
-    jaccard         0.722         0.000118     6136
+    init            0.226           0.0651     3.46
+    initsort        0.202           0.0786     2.57
+    and             0.155         0.000135     1146
+    or              0.197           0.0002      985
+    xor             0.185         0.000198      933
+    sub              0.12         0.000125      961
+    iand          0.00174         4.73e-06      367
+    ior          0.000929         3.73e-06      248
+    ixor          0.00113         3.99e-06      282
+    isub          0.00107         3.84e-06      279
+    eq             0.0607         1.65e-05     3685
+    neq          6.77e-06         8.57e-06     0.79
+    jaccard         0.352         8.27e-05     4250
 
 See https://github.com/Ezibenroc/roaring_analysis/ for a performance comparison
 of PyRoaringBitmap and this library.

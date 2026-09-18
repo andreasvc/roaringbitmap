@@ -12,3 +12,11 @@ dev = [
     "pytest>=3.0.0",
     "pycodestyle",
 ]
+
+[tool.cibuildwheel]
+build = "cp311-* cp312-* cp313-* cp314-* cp315-*"
+skip = "*-musllinux_*"
+build-verbosity = 1
+environment = { ROARINGBITMAP_BUILD_WHEEL = "1" }
+test-requires = "pytest"
+test-command = "python -m pytest {project}/tests/unittests.py"

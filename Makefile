@@ -1,8 +1,23 @@
 PYTHON3 ?= python3
 PYTHON2 ?= python2
 
-all:
+# pip builds in an isolated temporary directory, so retain Make's knowledge that
+# the current sources have already been built and installed for this Python.
+BUILD_INPUTS := setup.py pyproject.toml README.rst \
+	$(wildcard src/*.pyx src/*.pxi src/*.pxd src/*.h)
+PYTHON3_TAG := $(shell $(PYTHON3) -c \
+	'import sys; print("%s-%d.%d" % (sys.implementation.name, *sys.version_info[:2]))')
+INSTALL_STAMP := build/.installed-$(PYTHON3_TAG)
+
+.PHONY: all dev clean test bench lint py2 test2 bench2 debug debug2 \
+	testdebug testdebug2 valgrind
+
+all: $(INSTALL_STAMP)
+
+$(INSTALL_STAMP): $(BUILD_INPUTS)
 	$(PYTHON3) -m pip install --user .
+	@mkdir -p $(@D)
+	@touch $@
 
 dev:
 	$(PYTHON3) -m pip install --user --group dev

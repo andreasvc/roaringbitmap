@@ -61,6 +61,16 @@ cdef extern from *:
 	cdef bint PY2
 
 
+cdef extern from "cpu_features.h":
+	int roaring_cpu_supports_required_features()
+
+
+if not roaring_cpu_supports_required_features():
+	raise ImportError(
+			'roaringbitmap requires a CPU with POPCNT support; '
+			'build from source to target this CPU')
+
+
 cdef extern from *:
 	"""
 	#if PY_MAJOR_VERSION < 3

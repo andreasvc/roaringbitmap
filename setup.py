@@ -1,5 +1,6 @@
 """Generic setup.py for Cython code."""
 import os
+import platform
 import sys
 from setuptools import Extension, setup
 
@@ -28,11 +29,16 @@ MTUNE = '--with-mtune' in sys.argv
 if MTUNE:
         sys.argv.remove('--with-mtune')
 
+# Release wheels must not inherit all instruction sets from the CI host.  The
+# x86-64 wheels deliberately require POPCNT, which provides most of the
+# performance benefit of -march=native while remaining a predictable target.
+WHEEL_BUILD = os.environ.get('ROARINGBITMAP_BUILD_WHEEL') == '1'
+
 with open('README.rst') as inp:
 	README = inp.read()
 
 METADATA = dict(name='roaringbitmap',
-		version='0.7.3',
+		version='0.7.4',
 		description='Roaring Bitmap',
 		long_description=README,
 		long_description_content_type='text/x-rst',
@@ -85,7 +91,13 @@ if __name__ == '__main__':
 	extra_link_args = []
 	if not DEBUG and sys.platform != 'win32':
 		extra_compile_args += ['-O3', '-DNDEBUG']
-		extra_compile_args += ['-mtune=native'] if MTUNE else ['-march=native']
+		if WHEEL_BUILD:
+			if platform.machine().lower() in ('amd64', 'x86_64'):
+				extra_compile_args += [
+						'-DROARINGBITMAP_REQUIRE_POPCNT=1', '-mpopcnt']
+		else:
+			extra_compile_args += (
+					['-mtune=native'] if MTUNE else ['-march=native'])
 		extra_link_args += ['-DNDEBUG']
 	if USE_CYTHON:
 		if DEBUG:
