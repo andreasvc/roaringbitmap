@@ -40,8 +40,8 @@ The code is licensed under GNU GPL v2, or any later version at your option.
 
 Installation
 ------------
-
 ::
+
     $ pip install roaringbitmap
 
 For Linux and Mac, there are binary wheels. Binary wheels for x86-64 require
@@ -49,8 +49,7 @@ the POPCNT CPU instruction and raise ``ImportError`` on unsupported CPUs.
 Builds from source use ``-march=native`` by default and are optimized for the
 build machine.
 
-To compile from source:
-::
+To compile from source::
 
     $ git clone https://github.com/andreasvc/roaringbitmap.git
     $ cd roaringbitmap
